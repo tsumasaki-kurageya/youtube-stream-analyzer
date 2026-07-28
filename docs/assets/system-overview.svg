@@ -1,0 +1,114 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 760" role="img" aria-labelledby="title desc">
+  <title id="title">YouTube Stream Analyzer システム全体構成</title>
+  <desc id="desc">YouTube配信、収集基盤、保存基盤、分析・文脈レイヤー、切り抜き制作支援UIのつながりを俯瞰する図</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0d1b2d"/>
+      <stop offset="1" stop-color="#132845"/>
+    </linearGradient>
+    <linearGradient id="blue" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#3b82f6"/>
+      <stop offset="1" stop-color="#2563eb"/>
+    </linearGradient>
+    <linearGradient id="cyan" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#22d3ee"/>
+      <stop offset="1" stop-color="#0891b2"/>
+    </linearGradient>
+    <linearGradient id="violet" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#a78bfa"/>
+      <stop offset="1" stop-color="#7c3aed"/>
+    </linearGradient>
+    <linearGradient id="green" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#4ade80"/>
+      <stop offset="1" stop-color="#16a34a"/>
+    </linearGradient>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="14" stdDeviation="18" flood-color="#020617" flood-opacity=".28"/>
+    </filter>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto">
+      <path d="M0 0 10 5 0 10Z" fill="#94a3b8"/>
+    </marker>
+    <style>
+      .label{font-family:Inter,'Noto Sans JP',sans-serif;font-weight:800;fill:#f8fafc}
+      .body{font-family:Inter,'Noto Sans JP',sans-serif;fill:#cbd5e1}
+      .tiny{font-family:Inter,'Noto Sans JP',sans-serif;font-weight:700;fill:#94a3b8}
+      .line{stroke:#94a3b8;stroke-width:4;fill:none;marker-end:url(#arrow)}
+      .dash{stroke:#64748b;stroke-width:2;fill:none;stroke-dasharray:8 8}
+    </style>
+  </defs>
+
+  <rect x="10" y="10" width="1180" height="740" rx="36" fill="url(#bg)"/>
+
+  <text x="70" y="72" class="label" font-size="30">システム全体像</text>
+  <text x="70" y="106" class="body" font-size="16">配信データを集め、時間軸でそろえ、文脈を加え、切り抜き制作の判断へつなぐ</text>
+
+  <!-- source -->
+  <g filter="url(#shadow)">
+    <rect x="60" y="160" width="220" height="190" rx="26" fill="#f8fafc"/>
+    <circle cx="170" cy="213" r="34" fill="#ef4444"/>
+    <polygon points="160,194 160,232 190,213" fill="#fff"/>
+    <text x="170" y="275" text-anchor="middle" font-size="22" font-weight="800" fill="#172033" font-family="Inter,'Noto Sans JP',sans-serif">YouTube配信</text>
+    <text x="170" y="307" text-anchor="middle" font-size="14" fill="#64748b" font-family="Inter,'Noto Sans JP',sans-serif">アーカイブ／ライブ</text>
+    <text x="170" y="330" text-anchor="middle" font-size="14" fill="#64748b" font-family="Inter,'Noto Sans JP',sans-serif">複数チャンネル・複数視点</text>
+  </g>
+
+  <!-- collection -->
+  <g filter="url(#shadow)">
+    <rect x="360" y="135" width="250" height="240" rx="28" fill="url(#blue)"/>
+    <text x="485" y="180" text-anchor="middle" class="label" font-size="22">収集基盤</text>
+    <rect x="390" y="205" width="190" height="42" rx="13" fill="rgba(255,255,255,.16)"/>
+    <text x="485" y="232" text-anchor="middle" class="label" font-size="15">配信URL・予約登録</text>
+    <rect x="390" y="258" width="190" height="42" rx="13" fill="rgba(255,255,255,.16)"/>
+    <text x="485" y="285" text-anchor="middle" class="label" font-size="15">バックグラウンドジョブ</text>
+    <rect x="390" y="311" width="190" height="42" rx="13" fill="rgba(255,255,255,.16)"/>
+    <text x="485" y="338" text-anchor="middle" class="label" font-size="15">進捗・失敗・再実行</text>
+  </g>
+
+  <!-- storage -->
+  <g filter="url(#shadow)">
+    <rect x="690" y="135" width="250" height="240" rx="28" fill="url(#cyan)"/>
+    <text x="815" y="180" text-anchor="middle" class="label" font-size="22">保存・時刻同期</text>
+    <rect x="720" y="205" width="190" height="42" rx="13" fill="rgba(255,255,255,.16)"/>
+    <text x="815" y="232" text-anchor="middle" class="label" font-size="15">配信メタデータ</text>
+    <rect x="720" y="258" width="190" height="42" rx="13" fill="rgba(255,255,255,.16)"/>
+    <text x="815" y="285" text-anchor="middle" class="label" font-size="15">チャット・字幕・音声</text>
+    <rect x="720" y="311" width="190" height="42" rx="13" fill="rgba(255,255,255,.16)"/>
+    <text x="815" y="338" text-anchor="middle" class="label" font-size="15">共通タイムライン</text>
+  </g>
+
+  <!-- experience -->
+  <g filter="url(#shadow)">
+    <rect x="990" y="160" width="150" height="190" rx="26" fill="url(#green)"/>
+    <rect x="1022" y="197" width="86" height="62" rx="10" fill="rgba(255,255,255,.18)"/>
+    <polygon points="1055,211 1055,245 1080,228" fill="#fff"/>
+    <text x="1065" y="288" text-anchor="middle" class="label" font-size="20">制作支援UI</text>
+    <text x="1065" y="316" text-anchor="middle" class="body" font-size="13">探索・比較・判断</text>
+  </g>
+
+  <path d="M280 255H345" class="line"/>
+  <path d="M610 255H675" class="line"/>
+  <path d="M940 255H975" class="line"/>
+
+  <!-- analysis layer -->
+  <g filter="url(#shadow)">
+    <rect x="360" y="465" width="580" height="190" rx="30" fill="url(#violet)"/>
+    <text x="650" y="510" text-anchor="middle" class="label" font-size="23">分析・文脈レイヤー</text>
+    <rect x="395" y="538" width="155" height="78" rx="18" fill="rgba(255,255,255,.15)"/>
+    <text x="472" y="568" text-anchor="middle" class="label" font-size="15">時系列指標</text>
+    <text x="472" y="592" text-anchor="middle" class="body" font-size="13">コメント量・音量・反応</text>
+    <rect x="572" y="538" width="155" height="78" rx="18" fill="rgba(255,255,255,.15)"/>
+    <text x="649" y="568" text-anchor="middle" class="label" font-size="15">複数視点対応</text>
+    <text x="649" y="592" text-anchor="middle" class="body" font-size="13">同時刻・関連場面</text>
+    <rect x="749" y="538" width="155" height="78" rx="18" fill="rgba(255,255,255,.15)"/>
+    <text x="826" y="568" text-anchor="middle" class="label" font-size="15">ナレッジ</text>
+    <text x="826" y="592" text-anchor="middle" class="body" font-size="13">関係性・ミーム・過去文脈</text>
+  </g>
+
+  <path d="M815 375V440H650V465" class="line"/>
+  <path d="M940 560H1065V365" class="line"/>
+  <path d="M485 375V420" class="dash"/>
+
+  <!-- foundation -->
+  <rect x="60" y="695" width="1080" height="34" rx="17" fill="rgba(255,255,255,.08)"/>
+  <text x="600" y="718" text-anchor="middle" class="tiny" font-size="13">共通基盤：データモデル ／ ジョブ管理 ／ 監視・ログ ／ 再実行性 ／ 保存期間・権限</text>
+</svg>
