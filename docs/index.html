@@ -6,6 +6,7 @@
   <meta name="description" content="YouTube Stream Analyzerは、長時間・複数視点の配信から切り抜き候補を探すためのデータ収集・制作支援プロジェクトです。">
   <title>YouTube Stream Analyzer</title>
   <link rel="stylesheet" href="./assets/styles.css">
+  <link rel="stylesheet" href="./assets/system-overview.css">
 </head>
 <body>
   <header class="site-header">
@@ -19,6 +20,7 @@
       <a href="#problem">解決したいこと</a>
       <a href="#first-step">まず作るもの</a>
       <a href="#roadmap">ロードマップ</a>
+      <a href="#system-overview">全体構成</a>
     </nav>
   </header>
 
@@ -150,6 +152,20 @@
         <div class="goal-card">
           <p>最終的に目指すもの</p>
           <strong>ベテラン切り抜き師が行う「候補を探す → 前後を確認する → 別視点を辿る → 文脈から採用を判断する」という思考プロセスの支援</strong>
+        </div>
+
+        <div id="system-overview" class="system-overview-block">
+          <div class="system-overview-heading">
+            <div>
+              <p class="eyebrow">SYSTEM OVERVIEW</p>
+              <h3>システム全体を、データの流れで俯瞰する</h3>
+            </div>
+            <p>YouTube配信を入口に、収集・保存・時刻同期を共通基盤として整え、その上に複数視点の比較や配信者・イベントの文脈を重ね、切り抜き制作の探索と判断へつなげます。</p>
+          </div>
+          <figure class="system-overview-figure">
+            <img src="./assets/system-overview.svg" alt="YouTube配信から収集基盤、保存・時刻同期、分析・文脈レイヤー、切り抜き制作支援UIまでのシステム全体構成">
+            <figcaption>現在フェーズで構築する収集・閲覧基盤と、その上に段階的に追加する分析・文脈機能の関係を示しています。</figcaption>
+          </figure>
         </div>
       </div>
     </section>
