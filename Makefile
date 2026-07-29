@@ -8,13 +8,13 @@ dev:
 	@echo "No application runtime is defined in M0"
 
 test:
-	@./scripts/check-repository.sh
+	@bash scripts/check-repository.sh
 
 lint:
-	@./scripts/check-repository.sh
+	@bash scripts/check-repository.sh
 
 format:
 	@echo "No formatter-managed application sources exist in M0"
 
 check:
-	@./scripts/check-repository.sh
+	@bash scripts/check-repository.sh
