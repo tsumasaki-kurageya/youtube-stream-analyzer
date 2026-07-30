@@ -18,7 +18,7 @@ docs/
   decisions/             # ADRs
   implementation-plans/  # Milestone implementation plans
 .agents/
-  skills/                # Codex Agent Skills maintained separately
+  skills/                # Repository-level Codex Agent Skills maintained separately
 ```
 
 Directories are created when a milestone first needs them. Empty application projects and speculative shared packages must not be added during M0.
