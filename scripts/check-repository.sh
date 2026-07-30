@@ -3,7 +3,7 @@ set -euo pipefail
 
 required_files=(
   "AGENTS.md"
-  ".github/skills/.gitkeep"
+  ".agents/skills/.gitkeep"
   ".devcontainer/devcontainer.json"
   ".devcontainer/Dockerfile"
   ".env.example"
