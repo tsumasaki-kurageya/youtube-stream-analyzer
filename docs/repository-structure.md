@@ -17,7 +17,7 @@ tests/
 docs/
   decisions/             # ADRs
   implementation-plans/  # Milestone implementation plans
-.github/
+.agents/
   skills/                # Codex Agent Skills maintained separately
 ```
 
