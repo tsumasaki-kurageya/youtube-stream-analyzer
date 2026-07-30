@@ -56,4 +56,4 @@ Add milestone-specific checks to this command as applications and services are i
 
 ## Agent Skills
 
-Codex Agent Skills are maintained separately by the repository owner. The repository only reserves `.agents/skills/` as their project-level placement directory. Do not add or modify Skill contents unless explicitly requested.
+Codex Agent Skills are maintained separately by the repository owner. The repository only reserves `.agents/skills/` as their repository-level placement directory. Do not add or modify Skill contents unless explicitly requested.
