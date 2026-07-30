@@ -11,6 +11,9 @@ coverage/
 __pycache__/
 *.pyc
 
+# Keep Graphify PoC output local until the commit policy is decided.
+graphify-out/
+
 .vscode/
 .idea/
 .DS_Store

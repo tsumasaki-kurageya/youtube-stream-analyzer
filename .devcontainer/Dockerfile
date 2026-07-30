@@ -3,6 +3,7 @@ FROM mcr.microsoft.com/devcontainers/base:ubuntu-24.04
 ARG NODE_VERSION=22
 ARG GO_VERSION=1.24.5
 ARG PYTHON_VERSION=3.13
+ARG GRAPHIFY_VERSION=0.9.30
 
 USER root
 
@@ -13,6 +14,7 @@ RUN apt-get update \
         git \
         jq \
         make \
+        pipx \
         postgresql-client \
         python3 \
         python3-pip \
@@ -30,6 +32,9 @@ RUN curl -fsSL "https://go.dev/dl/go${GO_VERSION}.linux-amd64.tar.gz" -o /tmp/go
     && tar -C /usr/local -xzf /tmp/go.tgz \
     && rm /tmp/go.tgz
 
-ENV PATH="/usr/local/go/bin:${PATH}"
+ENV PATH="/home/vscode/.local/bin:/usr/local/go/bin:${PATH}"
 
 USER vscode
+
+RUN pipx install "graphifyy==${GRAPHIFY_VERSION}" \
+    && graphify --version

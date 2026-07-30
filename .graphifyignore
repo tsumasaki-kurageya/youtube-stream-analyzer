@@ -1,0 +1,6 @@
+# Keep generated graph data out of its own input corpus.
+graphify-out/
+
+# Agent tooling is not part of the product codebase graph.
+.agents/skills/
+.codex/
