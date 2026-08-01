@@ -39,6 +39,7 @@ func main() {
 		log.Fatal(err)
 	}
 	streamRepository := streamapi.NewRepository(db)
+	readHandler := streamapi.NewReadHandler(streamRepository)
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /api/health", writeOK)
@@ -53,6 +54,8 @@ func main() {
 	})
 	mux.Handle("POST /api/streams/preview", streamapi.NewPreviewHandler(youtubeClient))
 	mux.Handle("POST /api/streams", streamapi.NewRegisterHandler(youtubeClient, streamRepository))
+	mux.HandleFunc("GET /api/streams", readHandler.List)
+	mux.HandleFunc("GET /api/streams/{streamId}", readHandler.Detail)
 
 	server := &http.Server{Addr: addr, Handler: mux, ReadHeaderTimeout: 5 * time.Second}
 	go func() {
