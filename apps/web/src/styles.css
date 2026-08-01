@@ -8,19 +8,22 @@
 * { box-sizing: border-box; }
 body { margin: 0; }
 button, input { font: inherit; }
+a { color: #263f9b; }
 
 main {
   max-width: 64rem;
   margin: 0 auto;
-  padding: 4rem 1.5rem;
+  padding: 2rem 1.5rem 4rem;
 }
 
+nav { display: flex; justify-content: flex-end; gap: .35rem; margin-bottom: 2rem; }
+button.link { background: transparent; color: #263f9b; padding: .55rem .75rem; }
 header { max-width: 42rem; margin-bottom: 2rem; }
 h1 { margin: .25rem 0 .75rem; font-size: clamp(2rem, 5vw, 3.25rem); line-height: 1.1; }
 h2 { margin: .25rem 0 1rem; }
 .eyebrow { margin: 0; font-size: .78rem; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: #53627c; }
 
-form, .preview {
+form, .preview, .empty {
   background: #fff;
   border: 1px solid #dce2ec;
   border-radius: 1rem;
@@ -36,6 +39,7 @@ button { border: 0; border-radius: .65rem; padding: .85rem 1.1rem; background: #
 button:disabled { opacity: .58; cursor: wait; }
 button.secondary { background: #eef1f7; color: #26344d; }
 .error { margin-bottom: 0; color: #a32020; font-weight: 650; }
+.actions { display: flex; flex-wrap: wrap; gap: .75rem; }
 
 .preview { display: grid; grid-template-columns: minmax(15rem, 40%) 1fr; gap: 1.5rem; margin-top: 1.5rem; }
 .preview img { display: block; width: 100%; aspect-ratio: 16 / 9; object-fit: cover; border-radius: .75rem; background: #e9edf4; }
@@ -44,8 +48,18 @@ dl div { display: grid; grid-template-columns: 7rem 1fr; gap: .75rem; padding: .
 dt { color: #657189; }
 dd { margin: 0; font-weight: 650; }
 
+.stream-list { list-style: none; margin: 0; padding: 0; display: grid; gap: .85rem; }
+.stream-item { width: 100%; display: grid; grid-template-columns: 12rem 1fr; gap: 1rem; align-items: center; text-align: left; background: #fff; color: #172033; border: 1px solid #dce2ec; box-shadow: 0 .5rem 1.5rem rgb(41 55 84 / 6%); }
+.stream-item:hover, .stream-item:focus-visible { border-color: #8094d9; outline: 3px solid rgb(58 100 220 / 16%); }
+.stream-item img { width: 100%; aspect-ratio: 16 / 9; object-fit: cover; border-radius: .5rem; }
+.stream-item span { display: grid; gap: .35rem; }
+.stream-item small { color: #657189; }
+.empty { max-width: 36rem; }
+
 @media (max-width: 42rem) {
-  main { padding-top: 2rem; }
+  main { padding-top: 1.25rem; }
+  nav { justify-content: flex-start; }
   .input-row, .preview { display: flex; flex-direction: column; }
   .input-row button { width: 100%; }
+  .stream-item { grid-template-columns: 7rem 1fr; padding: .7rem; }
 }
