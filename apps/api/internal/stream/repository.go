@@ -39,25 +39,16 @@ func (r *Repository) Insert(ctx context.Context, value Stream) (Stream, error) {
 // existing canonical row on subsequent or concurrent registrations.
 func (r *Repository) Register(ctx context.Context, value Stream) (Stream, bool, error) {
 	row := r.db.QueryRow(ctx, `
-		WITH inserted AS (
-			INSERT INTO stream.streams (
-				youtube_video_id, source_url, title, channel_id, channel_title,
-				thumbnail_url, scheduled_start_at, actual_start_at, actual_end_at,
-				duration_seconds, published_at
-			) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
-			ON CONFLICT (youtube_video_id) DO NOTHING
-			RETURNING id, youtube_video_id, source_url, title, channel_id, channel_title,
-				thumbnail_url, scheduled_start_at, actual_start_at, actual_end_at,
-				duration_seconds, published_at, created_at, updated_at
-		)
-		SELECT *, true AS created FROM inserted
-		UNION ALL
-		SELECT id, youtube_video_id, source_url, title, channel_id, channel_title,
+		INSERT INTO stream.streams (
+			youtube_video_id, source_url, title, channel_id, channel_title,
 			thumbnail_url, scheduled_start_at, actual_start_at, actual_end_at,
-			duration_seconds, published_at, created_at, updated_at, false AS created
-		FROM stream.streams
-		WHERE youtube_video_id = $1 AND NOT EXISTS (SELECT 1 FROM inserted)
-		LIMIT 1`,
+			duration_seconds, published_at
+		) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
+		ON CONFLICT (youtube_video_id) DO UPDATE
+		SET youtube_video_id = EXCLUDED.youtube_video_id
+		RETURNING id, youtube_video_id, source_url, title, channel_id, channel_title,
+			thumbnail_url, scheduled_start_at, actual_start_at, actual_end_at,
+			duration_seconds, published_at, created_at, updated_at, (xmax = 0) AS created`,
 		value.YouTubeVideoID, value.SourceURL, value.Title, value.ChannelID,
 		value.ChannelTitle, value.ThumbnailURL, value.ScheduledStartAt,
 		value.ActualStartAt, value.ActualEndAt, value.DurationSeconds, value.PublishedAt,
