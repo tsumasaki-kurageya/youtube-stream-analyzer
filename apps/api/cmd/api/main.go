@@ -10,7 +10,9 @@ import (
 	"syscall"
 	"time"
 
+	streamapi "github.com/tsumasaki-kurageya/youtube-stream-analyzer/apps/api/internal/stream"
 	"github.com/tsumasaki-kurageya/youtube-stream-analyzer/apps/api/internal/platform"
+	"github.com/tsumasaki-kurageya/youtube-stream-analyzer/apps/api/internal/youtube"
 )
 
 type healthResponse struct {
@@ -32,6 +34,11 @@ func main() {
 	}
 	defer db.Close()
 
+	youtubeClient, err := youtube.NewClient(os.Getenv("YSA_YOUTUBE_API_KEY"), os.Getenv("YSA_YOUTUBE_API_BASE_URL"), 10*time.Second)
+	if err != nil {
+		log.Fatal(err)
+	}
+
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /api/health", writeOK)
 	mux.HandleFunc("GET /api/ready", func(w http.ResponseWriter, r *http.Request) {
@@ -43,6 +50,7 @@ func main() {
 		}
 		writeOK(w, r)
 	})
+	mux.Handle("POST /api/streams/preview", streamapi.NewPreviewHandler(youtubeClient))
 
 	server := &http.Server{Addr: addr, Handler: mux, ReadHeaderTimeout: 5 * time.Second}
 	go func() {
