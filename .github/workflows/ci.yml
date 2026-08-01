@@ -36,9 +36,9 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - name: Install API dependencies
+      - name: Resolve API dependencies
         working-directory: apps/api
-        run: go mod download
+        run: go mod tidy
       - name: Install web dependencies
         working-directory: apps/web
         run: npm install
