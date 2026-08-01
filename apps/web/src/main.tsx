@@ -1,4 +1,4 @@
-import { FormEvent, StrictMode, useEffect, useState } from 'react';
+import { FormEvent, StrictMode, useEffect, useState, type ReactNode } from 'react';
 import { createRoot } from 'react-dom/client';
 import './styles.css';
 
@@ -128,7 +128,7 @@ function DetailPage({ id }: { id: string }) {
   return <main><Navigation />{loading && <p role="status">読み込み中…</p>}{error && <section><h1>配信を表示できません</h1><p role="alert" className="error">{error}</p><button onClick={() => navigate('/streams')}>一覧へ戻る</button></section>}{stream && <><header><p className="eyebrow">登録済み配信</p><h1>{stream.title}</h1></header><StreamCard stream={stream}><p><a href={stream.sourceUrl} target="_blank" rel="noreferrer">YouTubeで元配信を開く</a></p><button className="secondary" onClick={() => navigate('/streams')}>一覧へ戻る</button></StreamCard></>}</main>;
 }
 
-function StreamCard({ stream, children }: { stream: Stream; children?: React.ReactNode }) {
+function StreamCard({ stream, children }: { stream: Stream; children?: ReactNode }) {
   return <section className="preview"><img src={stream.thumbnailUrl} alt=""/><div><h2>{stream.title}</h2><dl><div><dt>チャンネル</dt><dd>{stream.channelTitle}</dd></div><div><dt>配信開始</dt><dd>{new Date(stream.actualStartAt).toLocaleString('ja-JP')}</dd></div><div><dt>配信終了</dt><dd>{new Date(stream.actualEndAt).toLocaleString('ja-JP')}</dd></div><div><dt>動画時間</dt><dd>{duration(stream.durationSeconds)}</dd></div></dl>{children}</div></section>;
 }
 function NotFoundPage() { return <main><Navigation /><h1>ページが見つかりません</h1><button onClick={() => navigate('/streams')}>配信一覧へ</button></main>; }
