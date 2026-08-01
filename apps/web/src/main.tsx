@@ -67,8 +67,8 @@ function App() {
     <main>
       <header>
         <p className="eyebrow">YouTube Stream Analyzer</p>
-        <h1>配信を登録</h1>
-        <p>終了済みのYouTubeライブ配信を確認してから登録できます。</p>
+        <h1>配信情報を確認</h1>
+        <p>終了済みのYouTubeライブ配信URLから、登録前に配信情報を確認します。</p>
       </header>
 
       <form onSubmit={submit} noValidate>
@@ -91,18 +91,14 @@ function App() {
         <section className="preview" aria-labelledby="preview-title">
           <img src={metadata.thumbnailUrl} alt="" />
           <div>
-            <p className="eyebrow">配信情報</p>
+            <p className="eyebrow">確認結果</p>
             <h2 id="preview-title">{metadata.title}</h2>
             <dl>
               <div><dt>チャンネル</dt><dd>{metadata.channelTitle}</dd></div>
               <div><dt>配信開始</dt><dd>{new Date(metadata.actualStartAt).toLocaleString('ja-JP')}</dd></div>
               <div><dt>動画時間</dt><dd>{duration(metadata.durationSeconds)}</dd></div>
             </dl>
-            <div className="actions">
-              <button type="button" disabled>登録</button>
-              <button type="button" className="secondary" onClick={() => setMetadata(null)}>入力し直す</button>
-            </div>
-            <p className="note">登録処理は次の実装タスクで有効になります。</p>
+            <button type="button" className="secondary" onClick={() => { setMetadata(null); setUrl(''); }}>別のURLを確認</button>
           </div>
         </section>
       )}
