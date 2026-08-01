@@ -20,6 +20,12 @@
       ]
     }
   },
+  "forwardPorts": [5173, 8080, 5432],
+  "portsAttributes": {
+    "5173": { "label": "Web UI" },
+    "8080": { "label": "Main API" },
+    "5432": { "label": "PostgreSQL" }
+  },
   "postCreateCommand": "make setup",
   "remoteUser": "vscode"
 }

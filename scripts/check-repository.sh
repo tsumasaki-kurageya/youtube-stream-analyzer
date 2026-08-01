@@ -10,6 +10,14 @@ required_files=(
   ".graphifyignore"
   ".codex/skills/graphify/.graphify_version"
   ".codex/skills/graphify/SKILL.md"
+  "compose.yaml"
+  "apps/api/go.mod"
+  "apps/api/cmd/api/main.go"
+  "apps/web/package.json"
+  "apps/web/tsconfig.json"
+  "apps/web/vite.config.ts"
+  "apps/web/index.html"
+  "apps/web/src/main.tsx"
   "docs/repository-structure.md"
   "docs/development/configuration.md"
   "docs/development/local-development.md"
@@ -39,7 +47,7 @@ fi
 if git rev-parse --verify HEAD^ >/dev/null 2>&1; then
   mapfile -d '' changed_text_files < <(
     git diff --name-only -z --diff-filter=ACM HEAD^ HEAD -- \
-      '*.md' '*.yml' '*.yaml' '*.json'
+      '*.md' '*.yml' '*.yaml' '*.json' '*.ts' '*.tsx' '*.go'
   )
 else
   changed_text_files=()

@@ -22,20 +22,54 @@ graphify --version
 make check
 ```
 
+## M1 startup
+
+Prepare local settings and dependencies:
+
+```bash
+cp .env.example .env
+make setup
+```
+
+Start PostgreSQL, Main API, and Web UI together:
+
+```bash
+make dev
+```
+
+Open the Web UI at `http://localhost:5173`. The page calls `GET /api/health` through the Vite proxy and displays whether the Main API is reachable.
+
+Service endpoints:
+
+- Web UI: `http://localhost:5173`
+- Main API health: `http://localhost:8080/api/health`
+- PostgreSQL: `localhost:5432`
+
+Stop the foreground Web/API processes with Ctrl+C, then stop PostgreSQL with:
+
+```bash
+make dev-stop
+```
+
+PostgreSQL data remains in the named Compose volume. Use `docker compose down -v` only when a clean database is explicitly required.
+
 ## Common commands
 
 ```bash
-make setup   # Install or prepare repository dependencies
-make dev     # Start implemented application processes
-make test    # Run tests available at the current milestone
-make lint    # Run static checks
-make format  # Apply formatters when source projects exist
-make check   # Run the CI-equivalent validation entry point
+make setup      # Install Web and Go dependencies
+make db-up      # Start PostgreSQL only
+make api        # Start Main API only
+make web        # Start Web UI only
+make dev        # Start PostgreSQL, Main API, and Web UI
+make dev-stop   # Stop Compose services
+make dev-logs   # Follow PostgreSQL logs
+make test       # Run available tests
+make lint       # Run formatting and type checks
+make format     # Format Go source
+make check      # Run the CI-equivalent validation entry point
 make graphify        # Rebuild the local, code-only knowledge graph
 make graphify-update # Update code nodes in an existing graph
 ```
-
-M0 intentionally has no application runtime. Commands are extended as M1 and later milestones add projects.
 
 ## Graphify
 
@@ -62,8 +96,10 @@ No Graphify Git hooks, Neo4j integration, MCP server, watch mode, or CI graph ge
 ## Troubleshooting
 
 - Dev Container build fails: rebuild without cache and confirm access to container registries and language download hosts.
+- Web displays `未接続`: confirm `make api` is running and `curl http://localhost:8080/api/health` succeeds.
+- PostgreSQL does not become healthy: inspect `make dev-logs` and confirm port 5432 is unused.
+- Docker CLI cannot connect: confirm the host Docker daemon is running and Docker-outside-of-Docker is available.
 - `graphify` is unavailable or reports another version: rebuild the Dev Container.
 - `make graphify-update` reports a missing graph: run `make graphify` first.
-- Docker CLI cannot connect: confirm the host Docker daemon is running and Docker-outside-of-Docker is available.
-- `make check` reports a missing file: restore the required M0 artifact or update the validation only when the repository convention changes intentionally.
+- `make check` reports a missing file: restore the required artifact or update validation only when the convention changes intentionally.
 - GitHub CLI is unauthenticated: run `gh auth login` before publishing branches or pull requests from the container.
