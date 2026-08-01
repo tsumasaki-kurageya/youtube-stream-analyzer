@@ -1,7 +1,7 @@
 GRAPHIFY_BIN ?= graphify
 GRAPHIFY_EXTRACT_ARGS ?= --code-only
 
-.PHONY: setup dev dev-stop dev-logs db-up db-down api web test lint format check graphify graphify-update
+.PHONY: setup dev dev-stop dev-logs db-up db-down db-migrate db-rollback api web test lint format check graphify graphify-update
 
 setup:
 	cd apps/web && npm install
@@ -13,13 +13,19 @@ db-up:
 db-down:
 	docker compose down
 
+db-migrate:
+	cd apps/api && go run ./cmd/migrate up
+
+db-rollback:
+	cd apps/api && go run ./cmd/migrate down
+
 api:
 	cd apps/api && go run ./cmd/api
 
 web:
 	cd apps/web && npm run dev
 
-dev: db-up
+dev: db-up db-migrate
 	@set -eu; \
 	trap 'kill 0' INT TERM EXIT; \
 	(cd apps/api && go run ./cmd/api) & \
