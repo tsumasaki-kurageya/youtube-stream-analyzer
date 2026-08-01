@@ -1,0 +1,159 @@
+openapi: 3.1.0
+info:
+  title: YouTube Stream Analyzer API
+  version: 0.1.0
+  description: M1 Web UI向けAPI契約
+servers:
+  - url: /api
+paths:
+  /streams/preview:
+    post:
+      operationId: previewStream
+      summary: YouTube配信情報を確認する
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StreamUrlRequest'
+      responses:
+        '200':
+          description: プレビュー成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StreamMetadata'
+        '400': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+        '422': { $ref: '#/components/responses/Problem' }
+        '429': { $ref: '#/components/responses/Problem' }
+        '502': { $ref: '#/components/responses/Problem' }
+        '503': { $ref: '#/components/responses/Problem' }
+  /streams:
+    post:
+      operationId: registerStream
+      summary: 終了済み配信を登録する
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StreamUrlRequest'
+      responses:
+        '200':
+          description: 登録済みStreamを返却
+          headers:
+            Location:
+              schema: { type: string }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Stream' }
+        '201':
+          description: Streamを新規登録
+          headers:
+            Location:
+              schema: { type: string }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Stream' }
+        '400': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+        '422': { $ref: '#/components/responses/Problem' }
+        '429': { $ref: '#/components/responses/Problem' }
+        '502': { $ref: '#/components/responses/Problem' }
+        '503': { $ref: '#/components/responses/Problem' }
+    get:
+      operationId: listStreams
+      summary: 登録済み配信を一覧取得する
+      responses:
+        '200':
+          description: 登録日時降順の一覧
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/StreamList' }
+        '500': { $ref: '#/components/responses/Problem' }
+  /streams/{streamId}:
+    get:
+      operationId: getStream
+      summary: 登録済み配信の詳細を取得する
+      parameters:
+        - name: streamId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Stream詳細
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Stream' }
+        '404': { $ref: '#/components/responses/Problem' }
+        '500': { $ref: '#/components/responses/Problem' }
+components:
+  responses:
+    Problem:
+      description: Problem Details
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/ProblemDetails' }
+  schemas:
+    StreamUrlRequest:
+      type: object
+      additionalProperties: false
+      required: [url]
+      properties:
+        url: { type: string, format: uri }
+    StreamMetadata:
+      type: object
+      required: [youtubeVideoId, title, channelId, channelTitle, thumbnailUrl, actualStartAt, actualEndAt, durationSeconds]
+      properties:
+        youtubeVideoId: { type: string, minLength: 11, maxLength: 11 }
+        title: { type: string }
+        channelId: { type: string }
+        channelTitle: { type: string }
+        thumbnailUrl: { type: string, format: uri }
+        scheduledStartAt: { type: [string, 'null'], format: date-time }
+        actualStartAt: { type: string, format: date-time }
+        actualEndAt: { type: string, format: date-time }
+        durationSeconds: { type: integer, format: int64, minimum: 0 }
+        publishedAt: { type: [string, 'null'], format: date-time }
+    Stream:
+      allOf:
+        - $ref: '#/components/schemas/StreamMetadata'
+        - type: object
+          required: [id, sourceUrl, createdAt, updatedAt]
+          properties:
+            id: { type: string, format: uuid }
+            sourceUrl: { type: string, format: uri }
+            createdAt: { type: string, format: date-time }
+            updatedAt: { type: string, format: date-time }
+    StreamList:
+      type: object
+      required: [items, total]
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/Stream' }
+        total: { type: integer, minimum: 0 }
+    ProblemDetails:
+      type: object
+      required: [type, title, status, code]
+      properties:
+        type: { type: string, format: uri-reference }
+        title: { type: string }
+        status: { type: integer, minimum: 400, maximum: 599 }
+        detail: { type: string }
+        instance: { type: string, format: uri-reference }
+        code:
+          type: string
+          enum:
+            - INVALID_YOUTUBE_URL
+            - YOUTUBE_VIDEO_NOT_FOUND
+            - NOT_ENDED_LIVE_STREAM
+            - YOUTUBE_ACCESS_DENIED
+            - YOUTUBE_QUOTA_EXCEEDED
+            - YOUTUBE_TEMPORARILY_UNAVAILABLE
+            - STREAM_NOT_FOUND
+            - INTERNAL_ERROR
