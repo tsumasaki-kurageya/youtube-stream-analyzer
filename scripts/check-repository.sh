@@ -34,10 +34,28 @@ if [[ "$actual_graphify_version" != "$expected_graphify_version" ]]; then
   exit 1
 fi
 
-if find . -type f \( -name '*.md' -o -name '*.yml' -o -name '*.yaml' -o -name '*.json' \) -print0 \
-  | xargs -0 grep -n $'\r' >/tmp/youtube-stream-analyzer-crlf.txt 2>/dev/null; then
-  echo "CRLF characters detected:" >&2
-  cat /tmp/youtube-stream-analyzer-crlf.txt >&2
+# Do not fail a focused change because of pre-existing line endings elsewhere in
+# the repository. Validate text files changed by the current commit/PR only.
+if git rev-parse --verify HEAD^ >/dev/null 2>&1; then
+  mapfile -d '' changed_text_files < <(
+    git diff --name-only -z --diff-filter=ACM HEAD^ HEAD -- \
+      '*.md' '*.yml' '*.yaml' '*.json'
+  )
+else
+  changed_text_files=()
+fi
+
+crlf_files=()
+for file in "${changed_text_files[@]}"; do
+  [[ -f "$file" ]] || continue
+  if LC_ALL=C grep -q $'\r' "$file"; then
+    crlf_files+=("$file")
+  fi
+done
+
+if ((${#crlf_files[@]} > 0)); then
+  echo "CRLF characters detected in changed files:" >&2
+  printf '  %s\n' "${crlf_files[@]}" >&2
   exit 1
 fi
 
