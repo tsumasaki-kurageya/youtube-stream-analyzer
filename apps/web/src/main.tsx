@@ -1,18 +1,20 @@
-import { FormEvent, StrictMode, useState } from 'react';
+import { FormEvent, StrictMode, useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import './styles.css';
 
-type StreamMetadata = {
+type Stream = {
+  id: string;
   youtubeVideoId: string;
+  sourceUrl: string;
   title: string;
   channelTitle: string;
   thumbnailUrl: string;
   actualStartAt: string;
   actualEndAt: string;
   durationSeconds: number;
+  createdAt: string;
 };
-
-type RegisteredStream = StreamMetadata & { id: string; sourceUrl: string };
+type StreamList = { items: Stream[]; total: number };
 type ProblemDetails = { code?: string; title?: string };
 
 const messages: Record<string, string> = {
@@ -22,7 +24,8 @@ const messages: Record<string, string> = {
   YOUTUBE_ACCESS_DENIED: 'YouTubeから情報を取得できませんでした。',
   YOUTUBE_QUOTA_EXCEEDED: 'YouTube APIの利用上限に達しています。',
   YOUTUBE_TEMPORARILY_UNAVAILABLE: 'YouTubeから一時的に情報を取得できません。',
-  INTERNAL_ERROR: '配信を登録できませんでした。',
+  STREAM_NOT_FOUND: '配信が見つかりません。',
+  INTERNAL_ERROR: '処理を完了できませんでした。',
 };
 
 function duration(seconds: number) {
@@ -37,130 +40,98 @@ async function problemMessage(response: Response) {
   return messages[problem.code ?? ''] ?? problem.title ?? '処理を完了できませんでした。';
 }
 
+function navigate(path: string) {
+  window.history.pushState({}, '', path);
+  window.dispatchEvent(new PopStateEvent('popstate'));
+}
+
 function App() {
+  const [path, setPath] = useState(window.location.pathname);
+  useEffect(() => {
+    const listener = () => setPath(window.location.pathname);
+    window.addEventListener('popstate', listener);
+    return () => window.removeEventListener('popstate', listener);
+  }, []);
+
+  if (path === '/' || path === '/register') return <RegisterPage />;
+  if (path === '/streams') return <ListPage />;
+  const match = path.match(/^\/streams\/([^/]+)$/);
+  if (match) return <DetailPage id={match[1]} />;
+  return <NotFoundPage />;
+}
+
+function Navigation() {
+  return <nav aria-label="主要ナビゲーション"><button className="link" onClick={() => navigate('/streams')}>登録済み配信</button><button className="link" onClick={() => navigate('/register')}>配信を登録</button></nav>;
+}
+
+function RegisterPage() {
   const [url, setUrl] = useState('');
-  const [metadata, setMetadata] = useState<StreamMetadata | null>(null);
-  const [registered, setRegistered] = useState<RegisteredStream | null>(null);
+  const [preview, setPreview] = useState<Stream | null>(null);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [registering, setRegistering] = useState(false);
 
   async function submit(event: FormEvent) {
-    event.preventDefault();
-    setError('');
-    setMetadata(null);
-    setRegistered(null);
-    if (!url.trim()) {
-      setError('YouTube配信URLを入力してください。');
-      return;
-    }
+    event.preventDefault(); setError(''); setPreview(null);
+    if (!url.trim()) { setError('YouTube配信URLを入力してください。'); return; }
     setLoading(true);
     try {
-      const response = await fetch('/api/streams/preview', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url: url.trim() }),
-      });
+      const response = await fetch('/api/streams/preview', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ url: url.trim() }) });
       if (!response.ok) throw new Error(await problemMessage(response));
-      setMetadata((await response.json()) as StreamMetadata);
-    } catch (reason) {
-      setError(reason instanceof Error ? reason.message : '配信情報を取得できませんでした。');
-    } finally {
-      setLoading(false);
-    }
+      setPreview((await response.json()) as Stream);
+    } catch (reason) { setError(reason instanceof Error ? reason.message : '配信情報を取得できませんでした。'); }
+    finally { setLoading(false); }
   }
 
   async function register() {
-    setError('');
-    setRegistering(true);
+    setError(''); setRegistering(true);
     try {
-      const response = await fetch('/api/streams', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url: url.trim() }),
-      });
+      const response = await fetch('/api/streams', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ url: url.trim() }) });
       if (!response.ok) throw new Error(await problemMessage(response));
-      const stream = (await response.json()) as RegisteredStream;
-      setRegistered(stream);
-      setMetadata(null);
-      window.history.pushState({}, '', `/streams/${stream.id}`);
-    } catch (reason) {
-      setError(reason instanceof Error ? reason.message : '配信を登録できませんでした。');
-    } finally {
-      setRegistering(false);
-    }
+      const stream = (await response.json()) as Stream;
+      navigate(`/streams/${stream.id}`);
+    } catch (reason) { setError(reason instanceof Error ? reason.message : '配信を登録できませんでした。'); }
+    finally { setRegistering(false); }
   }
 
-  function reset() {
-    setMetadata(null);
-    setRegistered(null);
-    setError('');
-    setUrl('');
-    window.history.pushState({}, '', '/');
-  }
-
-  return (
-    <main>
-      <header>
-        <p className="eyebrow">YouTube Stream Analyzer</p>
-        <h1>{registered ? '配信を登録しました' : '配信を登録'}</h1>
-        <p>終了済みのYouTubeライブ配信URLを確認してから登録します。</p>
-      </header>
-
-      {!registered && (
-        <form onSubmit={submit} noValidate>
-          <label htmlFor="stream-url">YouTube配信URL</label>
-          <div className="input-row">
-            <input
-              id="stream-url"
-              type="url"
-              value={url}
-              onChange={(event) => setUrl(event.target.value)}
-              placeholder="https://www.youtube.com/watch?v=..."
-              aria-describedby={error ? 'form-error' : undefined}
-              disabled={loading || registering}
-            />
-            <button type="submit" disabled={loading || registering}>{loading ? '確認中…' : '配信情報を確認'}</button>
-          </div>
-        </form>
-      )}
-
-      {error && <p id="form-error" role="alert" className="error">{error}</p>}
-
-      {metadata && (
-        <section className="preview" aria-labelledby="preview-title">
-          <img src={metadata.thumbnailUrl} alt="" />
-          <div>
-            <p className="eyebrow">登録内容の確認</p>
-            <h2 id="preview-title">{metadata.title}</h2>
-            <dl>
-              <div><dt>チャンネル</dt><dd>{metadata.channelTitle}</dd></div>
-              <div><dt>配信開始</dt><dd>{new Date(metadata.actualStartAt).toLocaleString('ja-JP')}</dd></div>
-              <div><dt>動画時間</dt><dd>{duration(metadata.durationSeconds)}</dd></div>
-            </dl>
-            <div className="actions">
-              <button type="button" onClick={register} disabled={registering}>{registering ? '登録中…' : 'この配信を登録'}</button>
-              <button type="button" className="secondary" onClick={reset} disabled={registering}>別のURLを確認</button>
-            </div>
-          </div>
-        </section>
-      )}
-
-      {registered && (
-        <section className="preview" aria-labelledby="registered-title">
-          <img src={registered.thumbnailUrl} alt="" />
-          <div>
-            <p className="eyebrow">登録済み</p>
-            <h2 id="registered-title">{registered.title}</h2>
-            <p>{registered.channelTitle}</p>
-            <p role="status">同じURLを再登録しても、この配信が重複して作成されることはありません。</p>
-            <button type="button" className="secondary" onClick={reset}>別の配信を登録</button>
-          </div>
-        </section>
-      )}
-    </main>
-  );
+  return <main><Navigation /><header><p className="eyebrow">YouTube Stream Analyzer</p><h1>配信を登録</h1><p>終了済みのYouTubeライブ配信URLを確認してから登録します。</p></header>
+    <form onSubmit={submit} noValidate><label htmlFor="stream-url">YouTube配信URL</label><div className="input-row"><input id="stream-url" type="url" value={url} onChange={(event) => setUrl(event.target.value)} placeholder="https://www.youtube.com/watch?v=..." disabled={loading || registering}/><button type="submit" disabled={loading || registering}>{loading ? '確認中…' : '配信情報を確認'}</button></div></form>
+    {error && <p role="alert" className="error">{error}</p>}
+    {preview && <StreamCard stream={preview}><div className="actions"><button type="button" onClick={register} disabled={registering}>{registering ? '登録中…' : 'この配信を登録'}</button><button type="button" className="secondary" onClick={() => { setPreview(null); setUrl(''); }}>別のURLを確認</button></div></StreamCard>}
+  </main>;
 }
+
+function ListPage() {
+  const [data, setData] = useState<StreamList | null>(null);
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(true);
+  async function load() {
+    setLoading(true); setError('');
+    try { const response = await fetch('/api/streams'); if (!response.ok) throw new Error(await problemMessage(response)); setData((await response.json()) as StreamList); }
+    catch (reason) { setError(reason instanceof Error ? reason.message : '配信一覧を取得できませんでした。'); }
+    finally { setLoading(false); }
+  }
+  useEffect(() => { void load(); }, []);
+  return <main><Navigation /><header><p className="eyebrow">YouTube Stream Analyzer</p><h1>登録済み配信</h1></header>
+    {loading && <p role="status">読み込み中…</p>}
+    {error && <div><p role="alert" className="error">{error}</p><button onClick={load}>再読み込み</button></div>}
+    {!loading && !error && data?.total === 0 && <section className="empty"><h2>登録済み配信はありません</h2><p>終了済みの配信URLを登録すると、ここから確認できます。</p><button onClick={() => navigate('/register')}>最初の配信を登録</button></section>}
+    {data && data.items.length > 0 && <ul className="stream-list">{data.items.map((stream) => <li key={stream.id}><button className="stream-item" onClick={() => navigate(`/streams/${stream.id}`)}><img src={stream.thumbnailUrl} alt=""/><span><strong>{stream.title}</strong><small>{stream.channelTitle} · {new Date(stream.createdAt).toLocaleString('ja-JP')}</small></span></button></li>)}</ul>}
+  </main>;
+}
+
+function DetailPage({ id }: { id: string }) {
+  const [stream, setStream] = useState<Stream | null>(null);
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(true);
+  useEffect(() => { (async () => { try { const response = await fetch(`/api/streams/${id}`); if (!response.ok) throw new Error(await problemMessage(response)); setStream((await response.json()) as Stream); } catch (reason) { setError(reason instanceof Error ? reason.message : '配信情報を取得できませんでした。'); } finally { setLoading(false); } })(); }, [id]);
+  return <main><Navigation />{loading && <p role="status">読み込み中…</p>}{error && <section><h1>配信を表示できません</h1><p role="alert" className="error">{error}</p><button onClick={() => navigate('/streams')}>一覧へ戻る</button></section>}{stream && <><header><p className="eyebrow">登録済み配信</p><h1>{stream.title}</h1></header><StreamCard stream={stream}><p><a href={stream.sourceUrl} target="_blank" rel="noreferrer">YouTubeで元配信を開く</a></p><button className="secondary" onClick={() => navigate('/streams')}>一覧へ戻る</button></StreamCard></>}</main>;
+}
+
+function StreamCard({ stream, children }: { stream: Stream; children?: React.ReactNode }) {
+  return <section className="preview"><img src={stream.thumbnailUrl} alt=""/><div><h2>{stream.title}</h2><dl><div><dt>チャンネル</dt><dd>{stream.channelTitle}</dd></div><div><dt>配信開始</dt><dd>{new Date(stream.actualStartAt).toLocaleString('ja-JP')}</dd></div><div><dt>配信終了</dt><dd>{new Date(stream.actualEndAt).toLocaleString('ja-JP')}</dd></div><div><dt>動画時間</dt><dd>{duration(stream.durationSeconds)}</dd></div></dl>{children}</div></section>;
+}
+function NotFoundPage() { return <main><Navigation /><h1>ページが見つかりません</h1><button onClick={() => navigate('/streams')}>配信一覧へ</button></main>; }
 
 const root = document.getElementById('root');
 if (!root) throw new Error('root element not found');
