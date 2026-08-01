@@ -1,19 +1,51 @@
 :root {
-  font-family: system-ui, sans-serif;
-  color: #1f2937;
-  background: #f8fafc;
+  font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+  color: #172033;
+  background: #f5f7fb;
+  line-height: 1.5;
 }
 
-body {
-  margin: 0;
-}
+* { box-sizing: border-box; }
+body { margin: 0; }
+button, input { font: inherit; }
 
 main {
-  max-width: 48rem;
+  max-width: 64rem;
   margin: 0 auto;
   padding: 4rem 1.5rem;
 }
 
-h1 {
-  margin-bottom: 1rem;
+header { max-width: 42rem; margin-bottom: 2rem; }
+h1 { margin: .25rem 0 .75rem; font-size: clamp(2rem, 5vw, 3.25rem); line-height: 1.1; }
+h2 { margin: .25rem 0 1rem; }
+.eyebrow { margin: 0; font-size: .78rem; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: #53627c; }
+
+form, .preview {
+  background: #fff;
+  border: 1px solid #dce2ec;
+  border-radius: 1rem;
+  padding: 1.5rem;
+  box-shadow: 0 .75rem 2.5rem rgb(41 55 84 / 8%);
+}
+
+label { display: block; margin-bottom: .5rem; font-weight: 700; }
+.input-row { display: flex; gap: .75rem; }
+input { flex: 1; min-width: 0; padding: .85rem 1rem; border: 1px solid #aeb8c8; border-radius: .65rem; }
+input:focus { outline: 3px solid rgb(58 100 220 / 22%); border-color: #3a64dc; }
+button { border: 0; border-radius: .65rem; padding: .85rem 1.1rem; background: #263f9b; color: #fff; font-weight: 700; cursor: pointer; }
+button:disabled { opacity: .58; cursor: wait; }
+button.secondary { background: #eef1f7; color: #26344d; }
+.error { margin-bottom: 0; color: #a32020; font-weight: 650; }
+
+.preview { display: grid; grid-template-columns: minmax(15rem, 40%) 1fr; gap: 1.5rem; margin-top: 1.5rem; }
+.preview img { display: block; width: 100%; aspect-ratio: 16 / 9; object-fit: cover; border-radius: .75rem; background: #e9edf4; }
+dl { margin: 0 0 1.25rem; }
+dl div { display: grid; grid-template-columns: 7rem 1fr; gap: .75rem; padding: .55rem 0; border-bottom: 1px solid #edf0f5; }
+dt { color: #657189; }
+dd { margin: 0; font-weight: 650; }
+
+@media (max-width: 42rem) {
+  main { padding-top: 2rem; }
+  .input-row, .preview { display: flex; flex-direction: column; }
+  .input-row button { width: 100%; }
 }
