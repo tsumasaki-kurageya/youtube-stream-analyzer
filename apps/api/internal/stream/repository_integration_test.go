@@ -63,7 +63,14 @@ func TestRepositoryInsertGetList(t *testing.T) {
 		t.Fatalf("expected 1 stream, got %d", len(items))
 	}
 
-	if _, err := repo.Insert(ctx, created); err == nil {
-		t.Fatal("expected unique constraint violation")
+	existing, wasCreated, err := repo.Register(ctx, created)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if wasCreated {
+		t.Fatal("duplicate registration must not create a new row")
+	}
+	if existing.ID != created.ID {
+		t.Fatalf("duplicate registration returned %s, want %s", existing.ID, created.ID)
 	}
 }

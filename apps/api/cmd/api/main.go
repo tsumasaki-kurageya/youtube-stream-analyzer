@@ -10,8 +10,8 @@ import (
 	"syscall"
 	"time"
 
-	streamapi "github.com/tsumasaki-kurageya/youtube-stream-analyzer/apps/api/internal/stream"
 	"github.com/tsumasaki-kurageya/youtube-stream-analyzer/apps/api/internal/platform"
+	streamapi "github.com/tsumasaki-kurageya/youtube-stream-analyzer/apps/api/internal/stream"
 	"github.com/tsumasaki-kurageya/youtube-stream-analyzer/apps/api/internal/youtube"
 )
 
@@ -38,6 +38,7 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+	streamRepository := streamapi.NewRepository(db)
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /api/health", writeOK)
@@ -51,6 +52,7 @@ func main() {
 		writeOK(w, r)
 	})
 	mux.Handle("POST /api/streams/preview", streamapi.NewPreviewHandler(youtubeClient))
+	mux.Handle("POST /api/streams", streamapi.NewRegisterHandler(youtubeClient, streamRepository))
 
 	server := &http.Server{Addr: addr, Handler: mux, ReadHeaderTimeout: 5 * time.Second}
 	go func() {
