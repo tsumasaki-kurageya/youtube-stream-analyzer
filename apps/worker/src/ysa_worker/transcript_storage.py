@@ -1,7 +1,7 @@
 from __future__ import annotations
 
+from collections.abc import Iterable
 from dataclasses import dataclass
-from typing import Iterable
 
 import psycopg
 
@@ -66,7 +66,11 @@ class TranscriptRepository:
         source_etag: str | None,
     ) -> str:
         cursor.execute(
-            "UPDATE transcript.transcript_tracks SET is_selected = false, updated_at = now() WHERE stream_id = %s AND is_selected",
+            """
+            UPDATE transcript.transcript_tracks
+            SET is_selected = false, updated_at = now()
+            WHERE stream_id = %s AND is_selected
+            """,
             (stream_id,),
         )
         cursor.execute(
