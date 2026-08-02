@@ -12,6 +12,10 @@ from ysa_worker.chat_storage import ChatMessageRepository
 from ysa_worker.config import Settings
 from ysa_worker.jobs import ClaimedStep, JobRunner, JobStore, ProgressReporter, StepOutcome
 from ysa_worker.logging import configure_logging
+from ysa_worker.reservation_collection import (
+    ReservationCollectionRunner,
+    ReservationCollectionStore,
+)
 from ysa_worker.reservation_monitor import (
     ReservationMonitorRunner,
     ReservationStore,
@@ -151,6 +155,9 @@ def run(settings: Settings, stop_event: threading.Event) -> None:
         raise RuntimeError(f"unsupported collection step: {step.name}")
 
     job_runner = JobRunner(store, handle, settings.heartbeat_interval_seconds)
+    reservation_collection_runner = ReservationCollectionRunner(
+        ReservationCollectionStore(settings.database_url)
+    )
     reservation_runner = None
     if settings.youtube_api_key:
         reservation_runner = ReservationMonitorRunner(
@@ -169,7 +176,9 @@ def run(settings: Settings, stop_event: threading.Event) -> None:
 
     LOGGER.info("worker ready", extra={"worker_id": settings.worker_id})
     while not stop_event.is_set():
-        processed = reservation_runner.run_once() if reservation_runner else False
+        processed = reservation_collection_runner.run_once()
+        if not processed and reservation_runner:
+            processed = reservation_runner.run_once()
         if not processed:
             processed = job_runner.run_once()
         if not processed:
