@@ -3,6 +3,7 @@ package collection
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"sync"
 	"testing"
@@ -20,7 +21,8 @@ func testRepository(t *testing.T) (*Repository, *pgxpool.Pool, string) {
 	if err != nil { t.Fatal(err) }
 	t.Cleanup(db.Close)
 	var streamID string
-	err = db.QueryRow(ctx, `INSERT INTO stream.streams(youtube_video_id,source_url,title,channel_id,channel_title,thumbnail_url,actual_start_at,actual_end_at,duration_seconds) VALUES($1,$2,'test','channel','creator','https://example.test/t.jpg',now()-interval '1 hour',now(),3600) RETURNING id`, "jobtest"+time.Now().Format("040500")).Scan(&streamID)
+	videoID := fmt.Sprintf("job%08d", time.Now().UnixNano()%100000000)
+	err = db.QueryRow(ctx, `INSERT INTO stream.streams(youtube_video_id,source_url,title,channel_id,channel_title,thumbnail_url,actual_start_at,actual_end_at,duration_seconds) VALUES($1,$2,'test','channel','creator','https://example.test/t.jpg',now()-interval '1 hour',now(),3600) RETURNING id`, videoID, "https://www.youtube.com/watch?v="+videoID).Scan(&streamID)
 	if err != nil { t.Fatal(err) }
 	t.Cleanup(func(){ _, _ = db.Exec(ctx, `DELETE FROM stream.streams WHERE id=$1`, streamID) })
 	return NewRepository(db), db, streamID
