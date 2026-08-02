@@ -1,13 +1,18 @@
 type SearchItem = {
   id: string;
   type: 'chat' | 'transcript';
-  elapsedMilliseconds: number;
+  offsetMilliseconds: number;
+  endOffsetMilliseconds?: number | null;
   text: string;
-  authorName?: string;
-  languageCode?: string;
+  speaker?: string | null;
+  languageCode?: string | null;
 };
 
-type SearchPage = { items: SearchItem[]; nextCursor?: string | null };
+type SearchPage = {
+  items: SearchItem[];
+  nextCursor?: string | null;
+  hasMore: boolean;
+};
 
 type SearchState = {
   query: string;
@@ -94,12 +99,12 @@ function render(panel: HTMLElement): void {
     const row = document.createElement('li');
     const button = document.createElement('button');
     button.type = 'button';
-    button.addEventListener('click', () => seekTo(item.elapsedMilliseconds));
+    button.addEventListener('click', () => seekTo(item.offsetMilliseconds));
     const meta = document.createElement('span');
     meta.className = 'search-result-meta';
     const kind = item.type === 'chat' ? 'チャット' : '字幕';
-    const detail = item.type === 'chat' ? item.authorName ?? '投稿者不明' : item.languageCode ?? '言語不明';
-    meta.textContent = `${kind} · ${formatTime(item.elapsedMilliseconds)} · ${detail}`;
+    const detail = item.type === 'chat' ? item.speaker ?? '投稿者不明' : item.languageCode ?? '言語不明';
+    meta.textContent = `${kind} · ${formatTime(item.offsetMilliseconds)} · ${detail}`;
     const body = document.createElement('span');
     body.className = 'search-result-text';
     appendHighlighted(body, item.text || '（本文なし）', state.query);
@@ -135,7 +140,7 @@ async function search(panel: HTMLElement, append: boolean): Promise<void> {
     }
     const page = await response.json() as SearchPage;
     state.items = append ? [...state.items, ...page.items] : page.items;
-    state.nextCursor = page.nextCursor ?? null;
+    state.nextCursor = page.hasMore ? page.nextCursor ?? null : null;
   } catch (reason) {
     if (reason instanceof DOMException && reason.name === 'AbortError') return;
     state.error = reason instanceof Error ? reason.message : '検索を完了できませんでした。';
@@ -161,7 +166,7 @@ function createPanel(id: string): HTMLElement {
       </div>
     </div>
     <label for="stream-search-query">検索語</label>
-    <input id="stream-search-query" type="search" maxlength="100" autocomplete="off" placeholder="発言や字幕を入力" />
+    <input id="stream-search-query" type="search" maxlength="200" autocomplete="off" placeholder="発言や字幕を入力" />
     <p data-search-status aria-live="polite"></p>
     <div data-search-results></div>
     <button type="button" class="secondary" data-search-more hidden>次の50件を読み込む</button>
