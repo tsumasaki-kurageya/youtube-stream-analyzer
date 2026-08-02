@@ -30,11 +30,17 @@ def seed_job() -> str:
             (video_id, f"https://youtu.be/{video_id}"),
         ).fetchone()[0]
         job_id = connection.execute(
-            "INSERT INTO collection.collection_jobs(stream_id,status) VALUES(%s,'queued') RETURNING id",
+            """
+            INSERT INTO collection.collection_jobs(stream_id,status)
+            VALUES(%s,'queued') RETURNING id
+            """,
             (stream_id,),
         ).fetchone()[0]
         connection.execute(
-            "INSERT INTO collection.collection_steps(job_id,name,status) VALUES(%s,'chat_replay','queued')",
+            """
+            INSERT INTO collection.collection_steps(job_id,name,status)
+            VALUES(%s,'chat_replay','queued')
+            """,
             (job_id,),
         )
         return str(job_id)
@@ -59,7 +65,10 @@ def test_two_workers_claim_each_job_once() -> None:
         with lock:
             claimed.append(job.id)
 
-    threads = [threading.Thread(target=claim, args=(f"worker-{index}",)) for index in range(2)]
+    threads = [
+        threading.Thread(target=claim, args=(f"worker-{index}",))
+        for index in range(2)
+    ]
     for thread in threads:
         thread.start()
     for thread in threads:
@@ -79,7 +88,10 @@ def test_runner_persists_progress_and_success() -> None:
     assert runner.run_once() is True
     with psycopg.connect(DATABASE_URL) as connection:
         row = connection.execute(
-            "SELECT status,progress_count,worker_id,lease_expires_at FROM collection.collection_jobs WHERE id=%s",
+            """
+            SELECT status,progress_count,worker_id,lease_expires_at
+            FROM collection.collection_jobs WHERE id=%s
+            """,
             (job_id,),
         ).fetchone()
         step = connection.execute(
@@ -125,7 +137,11 @@ def test_expired_running_job_is_requeued_and_claimed() -> None:
             (timedelta(minutes=5), timedelta(minutes=5), timedelta(minutes=5), job_id),
         )
         connection.execute(
-            "UPDATE collection.collection_steps SET status='running',started_at=now()-interval '5 minutes' WHERE job_id=%s",
+            """
+            UPDATE collection.collection_steps
+            SET status='running',started_at=now()-interval '5 minutes'
+            WHERE job_id=%s
+            """,
             (job_id,),
         )
 
