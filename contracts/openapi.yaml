@@ -1,8 +1,8 @@
 openapi: 3.1.0
 info:
   title: YouTube Stream Analyzer API
-  version: 0.2.0
-  description: M1配信登録とM2ライブチャット収集・閲覧のHTTP契約
+  version: 0.3.0
+  description: M1配信登録、M2チャット収集、M3複数工程収集・字幕・同期閲覧・検索のHTTP契約
 servers:
   - url: /api
 paths:
@@ -79,15 +79,20 @@ paths:
               schema: { $ref: '#/components/schemas/Stream' }
         '404': { $ref: '#/components/responses/Problem' }
         '500': { $ref: '#/components/responses/Problem' }
-  /streams/{streamId}/chat-collections:
+  /streams/{streamId}/collections:
     post:
-      operationId: startChatCollection
-      summary: ライブチャット収集ジョブを開始する
+      operationId: startCollection
+      summary: M3標準工程の配信データ収集を開始する
       parameters:
         - $ref: '#/components/parameters/StreamId'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/StartCollectionRequest' }
       responses:
         '201':
-          description: ジョブを作成
+          description: 複数工程の収集Jobを作成
           headers:
             Location:
               schema: { type: string }
@@ -96,16 +101,65 @@ paths:
               schema: { $ref: '#/components/schemas/CollectionJob' }
         '404': { $ref: '#/components/responses/Problem' }
         '409': { $ref: '#/components/responses/Problem' }
+        '422': { $ref: '#/components/responses/Problem' }
         '500': { $ref: '#/components/responses/Problem' }
-  /streams/{streamId}/chat-collections/latest:
+  /streams/{streamId}/collections/latest:
     get:
-      operationId: getLatestChatCollection
-      summary: 最新のライブチャット収集状態を取得する
+      operationId: getLatestCollection
+      summary: 最新の複数工程収集状態を取得する
       parameters:
         - $ref: '#/components/parameters/StreamId'
       responses:
         '200':
-          description: 最新ジョブ
+          description: 最新Jobと全Step状態
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CollectionJob' }
+        '404': { $ref: '#/components/responses/Problem' }
+        '500': { $ref: '#/components/responses/Problem' }
+  /collection-jobs/{jobId}/steps/{stepName}/retry:
+    post:
+      operationId: retryCollectionStep
+      summary: 失敗した工程だけを再実行する
+      parameters:
+        - $ref: '#/components/parameters/JobId'
+        - $ref: '#/components/parameters/StepName'
+      responses:
+        '201':
+          description: 新しい工程attemptを作成
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CollectionStep' }
+        '404': { $ref: '#/components/responses/Problem' }
+        '409': { $ref: '#/components/responses/Problem' }
+        '422': { $ref: '#/components/responses/Problem' }
+        '500': { $ref: '#/components/responses/Problem' }
+  /streams/{streamId}/chat-collections:
+    post:
+      deprecated: true
+      operationId: startChatCollection
+      summary: M2互換のライブチャット収集ジョブを開始する
+      parameters:
+        - $ref: '#/components/parameters/StreamId'
+      responses:
+        '201':
+          description: チャット工程だけを持つJobを作成
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CollectionJob' }
+        '404': { $ref: '#/components/responses/Problem' }
+        '409': { $ref: '#/components/responses/Problem' }
+        '500': { $ref: '#/components/responses/Problem' }
+  /streams/{streamId}/chat-collections/latest:
+    get:
+      deprecated: true
+      operationId: getLatestChatCollection
+      summary: M2互換の最新チャット収集状態を取得する
+      parameters:
+        - $ref: '#/components/parameters/StreamId'
+      responses:
+        '200':
+          description: 最新チャットJob
           content:
             application/json:
               schema: { $ref: '#/components/schemas/CollectionJob' }
@@ -113,16 +167,14 @@ paths:
         '500': { $ref: '#/components/responses/Problem' }
   /collection-jobs/{jobId}/retry:
     post:
+      deprecated: true
       operationId: retryCollectionJob
-      summary: 失敗した収集ジョブを再実行する
+      summary: M2互換の単一工程Jobを再実行する
       parameters:
         - $ref: '#/components/parameters/JobId'
       responses:
         '201':
-          description: 新しいattemptのジョブを作成
-          headers:
-            Location:
-              schema: { type: string }
+          description: 新しいJob attemptを作成
           content:
             application/json:
               schema: { $ref: '#/components/schemas/CollectionJob' }
@@ -136,9 +188,7 @@ paths:
       summary: 収集済みチャットを経過時刻順に取得する
       parameters:
         - $ref: '#/components/parameters/StreamId'
-        - name: cursor
-          in: query
-          schema: { type: string }
+        - $ref: '#/components/parameters/Cursor'
         - name: limit
           in: query
           schema: { type: integer, minimum: 1, maximum: 200, default: 100 }
@@ -149,7 +199,93 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/ChatMessagePage' }
         '404': { $ref: '#/components/responses/Problem' }
-        '409': { $ref: '#/components/responses/Problem' }
+        '500': { $ref: '#/components/responses/Problem' }
+  /streams/{streamId}/transcript-segments:
+    get:
+      operationId: listTranscriptSegments
+      summary: 字幕セグメントを経過時刻順に取得する
+      parameters:
+        - $ref: '#/components/parameters/StreamId'
+        - $ref: '#/components/parameters/Cursor'
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 200, default: 100 }
+        - name: fromMs
+          in: query
+          schema: { type: integer, format: int64, minimum: 0 }
+        - name: toMs
+          in: query
+          schema: { type: integer, format: int64, minimum: 1 }
+      responses:
+        '200':
+          description: 字幕ページ
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TranscriptSegmentPage' }
+        '404': { $ref: '#/components/responses/Problem' }
+        '422': { $ref: '#/components/responses/Problem' }
+        '500': { $ref: '#/components/responses/Problem' }
+  /streams/{streamId}/timeline:
+    get:
+      operationId: getTimelineWindow
+      summary: 指定動画時刻範囲のチャットと字幕を取得する
+      parameters:
+        - $ref: '#/components/parameters/StreamId'
+        - name: fromMs
+          in: query
+          required: true
+          schema: { type: integer, format: int64, minimum: 0 }
+        - name: toMs
+          in: query
+          required: true
+          schema: { type: integer, format: int64, minimum: 1 }
+        - name: types
+          in: query
+          schema:
+            type: array
+            items: { type: string, enum: [chat, transcript] }
+            default: [chat, transcript]
+          style: form
+          explode: false
+      responses:
+        '200':
+          description: 同期タイムライン範囲
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TimelineWindow' }
+        '404': { $ref: '#/components/responses/Problem' }
+        '422': { $ref: '#/components/responses/Problem' }
+        '500': { $ref: '#/components/responses/Problem' }
+  /streams/{streamId}/search:
+    get:
+      operationId: searchStreamData
+      summary: チャットと字幕を文字列検索する
+      parameters:
+        - $ref: '#/components/parameters/StreamId'
+        - name: q
+          in: query
+          required: true
+          schema: { type: string, minLength: 1, maxLength: 200 }
+        - name: types
+          in: query
+          schema:
+            type: array
+            items: { type: string, enum: [chat, transcript] }
+            default: [chat, transcript]
+          style: form
+          explode: false
+        - $ref: '#/components/parameters/Cursor'
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 100, default: 50 }
+      responses:
+        '200':
+          description: 統一検索結果ページ
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/StreamSearchPage' }
+        '404': { $ref: '#/components/responses/Problem' }
+        '422': { $ref: '#/components/responses/Problem' }
         '500': { $ref: '#/components/responses/Problem' }
 components:
   parameters:
@@ -163,6 +299,15 @@ components:
       in: path
       required: true
       schema: { type: string, format: uuid }
+    StepName:
+      name: stepName
+      in: path
+      required: true
+      schema: { type: string, enum: [metadata, chat_replay, transcript] }
+    Cursor:
+      name: cursor
+      in: query
+      schema: { type: string }
   responses:
     Problem:
       description: RFC 9457 Problem Details
@@ -208,21 +353,52 @@ components:
           type: array
           items: { $ref: '#/components/schemas/Stream' }
         total: { type: integer, minimum: 0 }
+    StartCollectionRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        steps:
+          type: array
+          minItems: 1
+          uniqueItems: true
+          default: [metadata, chat_replay, transcript]
+          items: { type: string, enum: [metadata, chat_replay, transcript] }
     CollectionJob:
       type: object
-      required: [id, streamId, kind, status, attempt, processedCount, requestedAt, updatedAt]
+      required: [id, streamId, status, requestedSteps, progressCount, requestedAt, updatedAt, steps]
       properties:
         id: { type: string, format: uuid }
         streamId: { type: string, format: uuid }
-        kind: { type: string, enum: [chat_replay] }
-        status: { type: string, enum: [queued, running, succeeded, failed] }
-        attempt: { type: integer, minimum: 1 }
-        currentStep: { type: [string, 'null'], enum: [fetch_chat, null] }
-        processedCount: { type: integer, format: int64, minimum: 0 }
+        status: { type: string, enum: [queued, running, succeeded, partial, failed, cancelled] }
+        requestedSteps:
+          type: array
+          items: { type: string, enum: [metadata, chat_replay, transcript] }
+        progressCount: { type: integer, format: int64, minimum: 0 }
         requestedAt: { type: string, format: date-time }
         startedAt: { type: [string, 'null'], format: date-time }
         updatedAt: { type: string, format: date-time }
         finishedAt: { type: [string, 'null'], format: date-time }
+        error:
+          oneOf:
+            - $ref: '#/components/schemas/CollectionError'
+            - type: 'null'
+        steps:
+          type: array
+          items: { $ref: '#/components/schemas/CollectionStep' }
+    CollectionStep:
+      type: object
+      required: [id, jobId, name, status, attempt, progressCount, createdAt, updatedAt]
+      properties:
+        id: { type: string, format: uuid }
+        jobId: { type: string, format: uuid }
+        name: { type: string, enum: [metadata, chat_replay, transcript] }
+        status: { type: string, enum: [queued, running, succeeded, no_data, failed, cancelled] }
+        attempt: { type: integer, minimum: 1 }
+        progressCount: { type: integer, format: int64, minimum: 0 }
+        startedAt: { type: [string, 'null'], format: date-time }
+        finishedAt: { type: [string, 'null'], format: date-time }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
         error:
           oneOf:
             - $ref: '#/components/schemas/CollectionError'
@@ -244,8 +420,8 @@ components:
         authorDisplayName: { type: string }
         messageText: { type: string }
         publishedAt: { type: string, format: date-time }
-        offsetMilliseconds: { type: integer, format: int64 }
-        messageType: { type: string, enum: [text] }
+        offsetMilliseconds: { type: integer, format: int64, minimum: 0 }
+        messageType: { type: string, enum: [text, paid_message, membership] }
     ChatMessagePage:
       type: object
       required: [items, hasMore]
@@ -253,6 +429,58 @@ components:
         items:
           type: array
           items: { $ref: '#/components/schemas/ChatMessage' }
+        nextCursor: { type: [string, 'null'] }
+        hasMore: { type: boolean }
+    TranscriptSegment:
+      type: object
+      required: [id, trackId, languageCode, isAutoGenerated, startOffsetMilliseconds, endOffsetMilliseconds, text]
+      properties:
+        id: { type: string, format: uuid }
+        trackId: { type: string, format: uuid }
+        languageCode: { type: string }
+        isAutoGenerated: { type: boolean }
+        startOffsetMilliseconds: { type: integer, format: int64, minimum: 0 }
+        endOffsetMilliseconds: { type: integer, format: int64, minimum: 1 }
+        text: { type: string, minLength: 1 }
+    TranscriptSegmentPage:
+      type: object
+      required: [items, hasMore]
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/TranscriptSegment' }
+        nextCursor: { type: [string, 'null'] }
+        hasMore: { type: boolean }
+    TimelineWindow:
+      type: object
+      required: [fromMilliseconds, toMilliseconds, chatItems, transcriptItems]
+      properties:
+        fromMilliseconds: { type: integer, format: int64, minimum: 0 }
+        toMilliseconds: { type: integer, format: int64, minimum: 1 }
+        chatItems:
+          type: array
+          items: { $ref: '#/components/schemas/ChatMessage' }
+        transcriptItems:
+          type: array
+          items: { $ref: '#/components/schemas/TranscriptSegment' }
+    StreamSearchResult:
+      type: object
+      required: [type, id, offsetMilliseconds, text]
+      properties:
+        type: { type: string, enum: [chat, transcript] }
+        id: { type: string, format: uuid }
+        offsetMilliseconds: { type: integer, format: int64, minimum: 0 }
+        endOffsetMilliseconds: { type: [integer, 'null'], format: int64, minimum: 1 }
+        text: { type: string }
+        speaker: { type: [string, 'null'] }
+        languageCode: { type: [string, 'null'] }
+    StreamSearchPage:
+      type: object
+      required: [items, hasMore]
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/StreamSearchResult' }
         nextCursor: { type: [string, 'null'] }
         hasMore: { type: boolean }
     ProblemDetails:
@@ -277,8 +505,18 @@ components:
             - COLLECTION_ALREADY_ACTIVE
             - COLLECTION_JOB_NOT_FOUND
             - COLLECTION_JOB_NOT_RETRYABLE
+            - COLLECTION_STEP_NOT_FOUND
+            - COLLECTION_STEP_NOT_RETRYABLE
             - CHAT_COLLECTION_NOT_COMPLETED
             - CHAT_REPLAY_UNAVAILABLE
             - CHAT_SOURCE_CHANGED
             - CHAT_SOURCE_TEMPORARILY_UNAVAILABLE
+            - TRANSCRIPT_NOT_AVAILABLE
+            - TRANSCRIPT_ACCESS_DENIED
+            - TRANSCRIPT_SOURCE_CHANGED
+            - TRANSCRIPT_TEMPORARILY_UNAVAILABLE
+            - TRANSCRIPT_TIMEOUT
+            - INVALID_TIME_RANGE
+            - INVALID_SEARCH_QUERY
+            - INVALID_CURSOR
             - INTERNAL_ERROR
