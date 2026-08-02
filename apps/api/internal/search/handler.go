@@ -14,15 +14,25 @@ func NewHandler(repository *Repository) *Handler { return &Handler{repository: r
 
 func (h *Handler) Search(w http.ResponseWriter, r *http.Request) {
 	query := strings.TrimSpace(r.URL.Query().Get("q"))
-	if len([]rune(query)) < 1 || len([]rune(query)) > 100 {
-		writeProblem(w, http.StatusBadRequest, "INVALID_SEARCH_QUERY", "検索語は1〜100文字で指定してください")
+	if len([]rune(query)) < 1 || len([]rune(query)) > 200 {
+		writeProblem(
+			w,
+			http.StatusUnprocessableEntity,
+			"INVALID_SEARCH_QUERY",
+			"検索語は1〜200文字で指定してください",
+		)
 		return
 	}
 	limit := 50
 	if raw := r.URL.Query().Get("limit"); raw != "" {
 		value, err := strconv.Atoi(raw)
 		if err != nil || value < 1 || value > 100 {
-			writeProblem(w, http.StatusBadRequest, "INVALID_LIMIT", "ページ件数は1〜100で指定してください")
+			writeProblem(
+				w,
+				http.StatusUnprocessableEntity,
+				"INVALID_SEARCH_QUERY",
+				"ページ件数は1〜100で指定してください",
+			)
 			return
 		}
 		limit = value
@@ -39,9 +49,19 @@ func (h *Handler) Search(w http.ResponseWriter, r *http.Request) {
 		case errors.Is(err, ErrStreamNotFound):
 			writeProblem(w, http.StatusNotFound, "STREAM_NOT_FOUND", "配信が見つかりません")
 		case errors.Is(err, ErrInvalidCursor):
-			writeProblem(w, http.StatusBadRequest, "INVALID_CURSOR", "検索結果のページ位置が不正です")
+			writeProblem(
+				w,
+				http.StatusUnprocessableEntity,
+				"INVALID_CURSOR",
+				"検索結果のページ位置が不正です",
+			)
 		default:
-			writeProblem(w, http.StatusInternalServerError, "INTERNAL_ERROR", "検索を完了できませんでした")
+			writeProblem(
+				w,
+				http.StatusInternalServerError,
+				"INTERNAL_ERROR",
+				"検索を完了できませんでした",
+			)
 		}
 		return
 	}
