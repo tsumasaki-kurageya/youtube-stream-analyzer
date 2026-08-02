@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import threading
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
@@ -12,6 +13,8 @@ from urllib.request import Request, urlopen
 
 import psycopg
 from psycopg.rows import dict_row
+
+from ysa_worker.archive_readiness import ArchiveReadinessGateway, ReadinessResult
 
 LOGGER = logging.getLogger("ysa.worker.reservation")
 
@@ -43,6 +46,8 @@ class ClaimedReservation:
     youtube_video_id: str
     state: str
     scheduled_start_at: datetime | None
+    actual_start_at: datetime | None
+    actual_end_at: datetime | None
     monitor_attempt: int
     revision: int
 
@@ -74,9 +79,8 @@ class YouTubeReservationGateway:
                 "key": self.api_key,
             }
         )
-        endpoint = f"{self.base_url}/videos?{query}"
         request = Request(
-            endpoint,
+            f"{self.base_url}/videos?{query}",
             headers={"Accept": "application/json", "User-Agent": "ysa-worker/0.1"},
         )
         try:
@@ -164,8 +168,8 @@ class ReservationStore:
             result = connection.execute(
                 """
                 UPDATE reservation.reservations
-                SET worker_id=NULL, lease_expires_at=NULL, heartbeat_at=NULL,
-                    revision=revision+1, updated_at=now()
+                SET worker_id=NULL,lease_expires_at=NULL,heartbeat_at=NULL,
+                    revision=revision+1,updated_at=now()
                 WHERE state=ANY(%s) AND lease_expires_at < now()
                 """,
                 (list(ACTIVE_STATES),),
@@ -180,24 +184,22 @@ class ReservationStore:
             row = connection.execute(
                 """
                 WITH candidate AS (
-                    SELECT id
-                    FROM reservation.reservations
-                    WHERE state=ANY(%s)
-                      AND next_check_at <= now()
+                    SELECT id FROM reservation.reservations
+                    WHERE state=ANY(%s) AND next_check_at <= now()
+                      AND ready_for_collection_at IS NULL
                       AND (lease_expires_at IS NULL OR lease_expires_at < now())
                     ORDER BY next_check_at,id
-                    FOR UPDATE SKIP LOCKED
-                    LIMIT 1
+                    FOR UPDATE SKIP LOCKED LIMIT 1
                 )
                 UPDATE reservation.reservations r
-                SET worker_id=%s, heartbeat_at=now(),
+                SET worker_id=%s,heartbeat_at=now(),
                     lease_expires_at=now()+%s::interval,
                     monitor_attempt=monitor_attempt+1,
-                    revision=revision+1, updated_at=now()
-                FROM candidate
-                WHERE r.id=candidate.id
+                    revision=revision+1,updated_at=now()
+                FROM candidate WHERE r.id=candidate.id
                 RETURNING r.id::text,r.youtube_video_id,r.state,
-                          r.scheduled_start_at,r.monitor_attempt,r.revision
+                    r.scheduled_start_at,r.actual_start_at,r.actual_end_at,
+                    r.monitor_attempt,r.revision
                 """,
                 (
                     list(ACTIVE_STATES),
@@ -205,9 +207,7 @@ class ReservationStore:
                     timedelta(seconds=self.lease_seconds),
                 ),
             ).fetchone()
-            if row is None:
-                return None
-            return ClaimedReservation(**row)
+            return ClaimedReservation(**row) if row is not None else None
 
     def heartbeat(self, reservation_id: str, revision: int) -> bool:
         with psycopg.connect(self.database_url) as connection:
@@ -233,17 +233,23 @@ class ReservationStore:
                 UPDATE reservation.reservations
                 SET state=%s,scheduled_start_at=COALESCE(%s,scheduled_start_at),
                     actual_start_at=COALESCE(%s,actual_start_at),
-                    actual_end_at=COALESCE(%s,actual_end_at),next_check_at=%s,
-                    last_checked_at=now(),last_error_code=NULL,last_error_message=NULL,
+                    actual_end_at=COALESCE(%s,actual_end_at),
+                    archive_wait_started_at=CASE
+                        WHEN %s='waiting_for_archive'
+                        THEN COALESCE(archive_wait_started_at,%s,now())
+                        ELSE archive_wait_started_at END,
+                    next_check_at=%s,last_checked_at=now(),
+                    last_error_code=NULL,last_error_message=NULL,
                     last_error_retryable=NULL,worker_id=NULL,lease_expires_at=NULL,
                     heartbeat_at=NULL,revision=revision+1,updated_at=now()
-                WHERE id=%s AND worker_id=%s AND revision=%s
-                RETURNING state
+                WHERE id=%s AND worker_id=%s AND revision=%s RETURNING state
                 """,
                 (
                     observation.state,
                     observation.scheduled_start_at,
                     observation.actual_start_at,
+                    observation.actual_end_at,
+                    observation.state,
                     observation.actual_end_at,
                     observation.next_check_at,
                     claimed.id,
@@ -267,6 +273,52 @@ class ReservationStore:
                         observation.reason_code,
                     ),
                 )
+
+    def apply_readiness(
+        self,
+        claimed: ClaimedReservation,
+        result: ReadinessResult,
+    ) -> None:
+        with psycopg.connect(self.database_url) as connection, connection.transaction():
+            updated = connection.execute(
+                """
+                UPDATE reservation.reservations
+                SET archive_ready_at=CASE WHEN %s THEN COALESCE(archive_ready_at,now())
+                    ELSE archive_ready_at END,
+                    chat_replay_ready_at=CASE WHEN %s
+                    THEN COALESCE(chat_replay_ready_at,now()) ELSE chat_replay_ready_at END,
+                    ready_for_collection_at=CASE WHEN %s='ready'
+                    THEN COALESCE(ready_for_collection_at,now()) ELSE NULL END,
+                    next_check_at=%s,last_checked_at=now(),
+                    last_error_code=NULL,last_error_message=NULL,
+                    last_error_retryable=NULL,worker_id=NULL,lease_expires_at=NULL,
+                    heartbeat_at=NULL,revision=revision+1,updated_at=now()
+                WHERE id=%s AND worker_id=%s AND revision=%s
+                """,
+                (
+                    result.archive_ready,
+                    result.chat_replay_ready,
+                    result.state,
+                    result.next_check_at,
+                    claimed.id,
+                    self.worker_id,
+                    claimed.revision,
+                ),
+            )
+            if updated.rowcount != 1:
+                raise RuntimeError("reservation lease is no longer owned")
+            connection.execute(
+                """
+                INSERT INTO reservation.reservation_transitions(
+                    reservation_id,from_state,to_state,reason_code,detail
+                ) VALUES(%s,'waiting_for_archive','waiting_for_archive',%s,%s)
+                """,
+                (
+                    claimed.id,
+                    result.reason_code,
+                    f"archive={result.archive_ready},chat={result.chat_replay_ready}",
+                ),
+            )
 
     def fail(self, claimed: ClaimedReservation, error: Exception) -> None:
         retryable = bool(getattr(error, "retryable", False))
@@ -326,6 +378,17 @@ class ReservationMonitorRunner:
         self.store = store
         self.gateway = gateway
         self.heartbeat_seconds = heartbeat_seconds
+        chat_url = os.environ.get("YSA_CHAT_REPLAY_BASE_URL", "").strip()
+        self.readiness_gateway = (
+            ArchiveReadinessGateway(
+                gateway.api_key,
+                gateway.base_url,
+                chat_url,
+                gateway.timeout_seconds,
+            )
+            if chat_url
+            else None
+        )
 
     def run_once(self) -> bool:
         self.store.recover_expired()
@@ -341,8 +404,22 @@ class ReservationMonitorRunner:
         )
         heartbeat.start()
         try:
-            observation = self.gateway.observe(claimed.youtube_video_id)
-            self.store.apply(claimed, observation)
+            if claimed.state == "waiting_for_archive":
+                if self.readiness_gateway is None:
+                    raise ReservationMonitorError(
+                        "YSA_CHAT_REPLAY_BASE_URL is required for archive readiness"
+                    )
+                if claimed.actual_start_at is None or claimed.actual_end_at is None:
+                    raise ReservationMonitorError("stream start/end time is missing")
+                readiness = self.readiness_gateway.check(
+                    claimed.youtube_video_id,
+                    claimed.actual_start_at,
+                    claimed.actual_end_at,
+                )
+                self.store.apply_readiness(claimed, readiness)
+            else:
+                observation = self.gateway.observe(claimed.youtube_video_id)
+                self.store.apply(claimed, observation)
         except Exception as error:
             LOGGER.exception(
                 "reservation monitoring failed",
@@ -355,11 +432,14 @@ class ReservationMonitorRunner:
         return True
 
     def _heartbeat_loop(
-        self, claimed: ClaimedReservation, stop: threading.Event
+        self,
+        claimed: ClaimedReservation,
+        stop: threading.Event,
     ) -> None:
         while not stop.wait(self.heartbeat_seconds):
             if not self.store.heartbeat(claimed.id, claimed.revision):
                 LOGGER.warning(
-                    "reservation lease lost", extra={"reservation_id": claimed.id}
+                    "reservation lease lost",
+                    extra={"reservation_id": claimed.id},
                 )
                 return
