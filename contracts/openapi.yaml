@@ -1,8 +1,8 @@
 openapi: 3.1.0
 info:
   title: YouTube Stream Analyzer API
-  version: 0.1.0
-  description: M1 Web UI向けAPI契約
+  version: 0.2.0
+  description: M1配信登録とM2ライブチャット収集・閲覧のHTTP契約
 servers:
   - url: /api
 paths:
@@ -14,15 +14,13 @@ paths:
         required: true
         content:
           application/json:
-            schema:
-              $ref: '#/components/schemas/StreamUrlRequest'
+            schema: { $ref: '#/components/schemas/StreamUrlRequest' }
       responses:
         '200':
           description: プレビュー成功
           content:
             application/json:
-              schema:
-                $ref: '#/components/schemas/StreamMetadata'
+              schema: { $ref: '#/components/schemas/StreamMetadata' }
         '400': { $ref: '#/components/responses/Problem' }
         '403': { $ref: '#/components/responses/Problem' }
         '404': { $ref: '#/components/responses/Problem' }
@@ -38,22 +36,15 @@ paths:
         required: true
         content:
           application/json:
-            schema:
-              $ref: '#/components/schemas/StreamUrlRequest'
+            schema: { $ref: '#/components/schemas/StreamUrlRequest' }
       responses:
         '200':
           description: 登録済みStreamを返却
-          headers:
-            Location:
-              schema: { type: string }
           content:
             application/json:
               schema: { $ref: '#/components/schemas/Stream' }
         '201':
           description: Streamを新規登録
-          headers:
-            Location:
-              schema: { type: string }
           content:
             application/json:
               schema: { $ref: '#/components/schemas/Stream' }
@@ -79,10 +70,7 @@ paths:
       operationId: getStream
       summary: 登録済み配信の詳細を取得する
       parameters:
-        - name: streamId
-          in: path
-          required: true
-          schema: { type: string, format: uuid }
+        - $ref: '#/components/parameters/StreamId'
       responses:
         '200':
           description: Stream詳細
@@ -91,10 +79,93 @@ paths:
               schema: { $ref: '#/components/schemas/Stream' }
         '404': { $ref: '#/components/responses/Problem' }
         '500': { $ref: '#/components/responses/Problem' }
+  /streams/{streamId}/chat-collections:
+    post:
+      operationId: startChatCollection
+      summary: ライブチャット収集ジョブを開始する
+      parameters:
+        - $ref: '#/components/parameters/StreamId'
+      responses:
+        '201':
+          description: ジョブを作成
+          headers:
+            Location:
+              schema: { type: string }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CollectionJob' }
+        '404': { $ref: '#/components/responses/Problem' }
+        '409': { $ref: '#/components/responses/Problem' }
+        '500': { $ref: '#/components/responses/Problem' }
+  /streams/{streamId}/chat-collections/latest:
+    get:
+      operationId: getLatestChatCollection
+      summary: 最新のライブチャット収集状態を取得する
+      parameters:
+        - $ref: '#/components/parameters/StreamId'
+      responses:
+        '200':
+          description: 最新ジョブ
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CollectionJob' }
+        '404': { $ref: '#/components/responses/Problem' }
+        '500': { $ref: '#/components/responses/Problem' }
+  /collection-jobs/{jobId}/retry:
+    post:
+      operationId: retryCollectionJob
+      summary: 失敗した収集ジョブを再実行する
+      parameters:
+        - $ref: '#/components/parameters/JobId'
+      responses:
+        '201':
+          description: 新しいattemptのジョブを作成
+          headers:
+            Location:
+              schema: { type: string }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CollectionJob' }
+        '404': { $ref: '#/components/responses/Problem' }
+        '409': { $ref: '#/components/responses/Problem' }
+        '422': { $ref: '#/components/responses/Problem' }
+        '500': { $ref: '#/components/responses/Problem' }
+  /streams/{streamId}/chat-messages:
+    get:
+      operationId: listChatMessages
+      summary: 収集済みチャットを経過時刻順に取得する
+      parameters:
+        - $ref: '#/components/parameters/StreamId'
+        - name: cursor
+          in: query
+          schema: { type: string }
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 200, default: 100 }
+      responses:
+        '200':
+          description: チャットページ
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ChatMessagePage' }
+        '404': { $ref: '#/components/responses/Problem' }
+        '409': { $ref: '#/components/responses/Problem' }
+        '500': { $ref: '#/components/responses/Problem' }
 components:
+  parameters:
+    StreamId:
+      name: streamId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    JobId:
+      name: jobId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
   responses:
     Problem:
-      description: Problem Details
+      description: RFC 9457 Problem Details
       content:
         application/problem+json:
           schema: { $ref: '#/components/schemas/ProblemDetails' }
@@ -137,6 +208,53 @@ components:
           type: array
           items: { $ref: '#/components/schemas/Stream' }
         total: { type: integer, minimum: 0 }
+    CollectionJob:
+      type: object
+      required: [id, streamId, kind, status, attempt, processedCount, requestedAt, updatedAt]
+      properties:
+        id: { type: string, format: uuid }
+        streamId: { type: string, format: uuid }
+        kind: { type: string, enum: [chat_replay] }
+        status: { type: string, enum: [queued, running, succeeded, failed] }
+        attempt: { type: integer, minimum: 1 }
+        currentStep: { type: [string, 'null'], enum: [fetch_chat, null] }
+        processedCount: { type: integer, format: int64, minimum: 0 }
+        requestedAt: { type: string, format: date-time }
+        startedAt: { type: [string, 'null'], format: date-time }
+        updatedAt: { type: string, format: date-time }
+        finishedAt: { type: [string, 'null'], format: date-time }
+        error:
+          oneOf:
+            - $ref: '#/components/schemas/CollectionError'
+            - type: 'null'
+    CollectionError:
+      type: object
+      required: [code, message, retryable]
+      properties:
+        code: { type: string }
+        message: { type: string }
+        retryable: { type: boolean }
+    ChatMessage:
+      type: object
+      required: [id, externalMessageId, authorDisplayName, messageText, publishedAt, offsetMilliseconds, messageType]
+      properties:
+        id: { type: string, format: uuid }
+        externalMessageId: { type: string }
+        authorChannelId: { type: [string, 'null'] }
+        authorDisplayName: { type: string }
+        messageText: { type: string }
+        publishedAt: { type: string, format: date-time }
+        offsetMilliseconds: { type: integer, format: int64 }
+        messageType: { type: string, enum: [text] }
+    ChatMessagePage:
+      type: object
+      required: [items, hasMore]
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/ChatMessage' }
+        nextCursor: { type: [string, 'null'] }
+        hasMore: { type: boolean }
     ProblemDetails:
       type: object
       required: [type, title, status, code]
@@ -156,4 +274,11 @@ components:
             - YOUTUBE_QUOTA_EXCEEDED
             - YOUTUBE_TEMPORARILY_UNAVAILABLE
             - STREAM_NOT_FOUND
+            - COLLECTION_ALREADY_ACTIVE
+            - COLLECTION_JOB_NOT_FOUND
+            - COLLECTION_JOB_NOT_RETRYABLE
+            - CHAT_COLLECTION_NOT_COMPLETED
+            - CHAT_REPLAY_UNAVAILABLE
+            - CHAT_SOURCE_CHANGED
+            - CHAT_SOURCE_TEMPORARILY_UNAVAILABLE
             - INTERNAL_ERROR
