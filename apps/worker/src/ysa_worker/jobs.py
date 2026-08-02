@@ -27,6 +27,16 @@ ProgressReporter = Callable[[int], None]
 StepHandler = Callable[[ClaimedStep, ProgressReporter], StepOutcome | Any]
 
 
+def _step_rank_sql(alias: str) -> str:
+    return (
+        f"CASE {alias}.name "
+        "WHEN 'metadata' THEN 1 "
+        "WHEN 'chat_replay' THEN 2 "
+        "WHEN 'transcript' THEN 3 "
+        "ELSE 100 END"
+    )
+
+
 class JobStore:
     def __init__(self, database_url: str, worker_id: str, lease_seconds: int) -> None:
         self.database_url = database_url
@@ -56,48 +66,42 @@ class JobStore:
             return result.rowcount or 0
 
     def claim(self) -> ClaimedStep | None:
+        current_rank = _step_rank_sql("s")
+        previous_rank = _step_rank_sql("previous")
+        query = f"""
+            WITH candidate AS (
+                SELECT s.id
+                FROM collection.collection_steps s
+                JOIN collection.collection_jobs j ON j.id=s.job_id
+                WHERE s.status='queued'
+                  AND NOT EXISTS (
+                    SELECT 1 FROM collection.collection_steps previous
+                    WHERE previous.job_id=s.job_id
+                      AND {previous_rank} < {current_rank}
+                      AND previous.status NOT IN ('succeeded','no_data','cancelled')
+                  )
+                  AND NOT EXISTS (
+                    SELECT 1 FROM collection.collection_steps active
+                    WHERE active.job_id=s.job_id AND active.status='running'
+                  )
+                ORDER BY j.created_at, {current_rank}, s.id
+                FOR UPDATE OF s SKIP LOCKED
+                LIMIT 1
+            )
+            UPDATE collection.collection_steps s
+            SET status='running', worker_id=%s,
+                started_at=COALESCE(started_at,now()), heartbeat_at=now(),
+                lease_expires_at=now()+%s::interval, updated_at=now()
+            FROM candidate, collection.collection_jobs j
+            WHERE s.id=candidate.id AND j.id=s.job_id
+            RETURNING s.id::text,s.job_id::text,j.stream_id::text,s.name,s.attempt
+        """
         with (
             psycopg.connect(self.database_url, row_factory=dict_row) as connection,
             connection.transaction(),
         ):
             row = connection.execute(
-                """
-                WITH ranked AS (
-                    SELECT s.*,
-                        CASE s.name
-                            WHEN 'metadata' THEN 1
-                            WHEN 'chat_replay' THEN 2
-                            WHEN 'transcript' THEN 3
-                            ELSE 100
-                        END AS step_rank
-                    FROM collection.collection_steps s
-                ), candidate AS (
-                    SELECT s.id
-                    FROM ranked s
-                    JOIN collection.collection_jobs j ON j.id=s.job_id
-                    WHERE s.status='queued'
-                      AND NOT EXISTS (
-                        SELECT 1 FROM ranked previous
-                        WHERE previous.job_id=s.job_id
-                          AND previous.step_rank < s.step_rank
-                          AND previous.status NOT IN ('succeeded','no_data','cancelled')
-                      )
-                      AND NOT EXISTS (
-                        SELECT 1 FROM collection.collection_steps active
-                        WHERE active.job_id=s.job_id AND active.status='running'
-                      )
-                    ORDER BY j.created_at, s.step_rank, s.id
-                    FOR UPDATE OF s SKIP LOCKED
-                    LIMIT 1
-                )
-                UPDATE collection.collection_steps s
-                SET status='running', worker_id=%s,
-                    started_at=COALESCE(started_at,now()), heartbeat_at=now(),
-                    lease_expires_at=now()+%s::interval, updated_at=now()
-                FROM candidate, collection.collection_jobs j
-                WHERE s.id=candidate.id AND j.id=s.job_id
-                RETURNING s.id::text,s.job_id::text,j.stream_id::text,s.name,s.attempt
-                """,
+                query,
                 (self.worker_id, timedelta(seconds=self.lease_seconds)),
             ).fetchone()
             if row is None:
