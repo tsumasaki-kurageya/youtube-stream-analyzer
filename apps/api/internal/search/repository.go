@@ -5,7 +5,6 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"errors"
-	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -16,24 +15,25 @@ var (
 )
 
 type Item struct {
-	ID                  string     `json:"id"`
-	Type                string     `json:"type"`
-	ElapsedMilliseconds int64      `json:"elapsedMilliseconds"`
-	Text                string     `json:"text"`
-	AuthorName          *string    `json:"authorName,omitempty"`
-	LanguageCode        *string    `json:"languageCode,omitempty"`
-	PublishedAt         *time.Time `json:"publishedAt,omitempty"`
+	Type                  string  `json:"type"`
+	ID                    string  `json:"id"`
+	OffsetMilliseconds    int64   `json:"offsetMilliseconds"`
+	EndOffsetMilliseconds *int64  `json:"endOffsetMilliseconds"`
+	Text                  string  `json:"text"`
+	Speaker               *string `json:"speaker"`
+	LanguageCode          *string `json:"languageCode"`
 }
 
 type Page struct {
 	Items      []Item  `json:"items"`
-	NextCursor *string `json:"nextCursor,omitempty"`
+	NextCursor *string `json:"nextCursor"`
+	HasMore    bool    `json:"hasMore"`
 }
 
 type cursor struct {
-	Elapsed int64  `json:"elapsed"`
-	Type    string `json:"type"`
-	ID      string `json:"id"`
+	Offset int64  `json:"offset"`
+	Type   string `json:"type"`
+	ID     string `json:"id"`
 }
 
 type Repository struct{ db *pgxpool.Pool }
@@ -71,25 +71,27 @@ func (r *Repository) Search(
 	rows, err := r.db.Query(ctx, `
 		WITH results AS (
 			SELECT m.id::text AS id, 'chat'::text AS type,
-			       m.elapsed_milliseconds::bigint AS elapsed,
-			       m.message_text AS text, m.author_name,
-			       NULL::text AS language_code, m.published_at
+			       m.elapsed_milliseconds::bigint AS offset_ms,
+			       NULL::bigint AS end_offset_ms,
+			       m.message_text AS text, m.author_name AS speaker,
+			       NULL::text AS language_code
 			FROM chat.chat_messages m
 			WHERE m.stream_id=$1 AND m.message_text ILIKE $2
 			UNION ALL
 			SELECT s.id::text, 'transcript'::text,
 			       s.start_offset_milliseconds::bigint,
-			       s.text, NULL::text, t.language_code, NULL::timestamptz
+			       s.end_offset_milliseconds::bigint,
+			       s.text, NULL::text, t.language_code
 			FROM transcript.transcript_segments s
 			JOIN transcript.transcript_tracks t ON t.id=s.track_id
 			WHERE s.stream_id=$1 AND s.text ILIKE $2
 		)
-		SELECT id,type,elapsed,text,author_name,language_code,published_at
+		SELECT id,type,offset_ms,end_offset_ms,text,speaker,language_code
 		FROM results
-		WHERE $3='' OR (elapsed,type,id) > ($4,$5,$6)
-		ORDER BY elapsed,type,id
+		WHERE $3='' OR (offset_ms,type,id) > ($4,$5,$6)
+		ORDER BY offset_ms,type,id
 		LIMIT $7
-	`, streamID, pattern, encodedCursor, after.Elapsed, after.Type, after.ID, limit+1)
+	`, streamID, pattern, encodedCursor, after.Offset, after.Type, after.ID, limit+1)
 	if err != nil {
 		return Page{}, err
 	}
@@ -101,11 +103,11 @@ func (r *Repository) Search(
 		if err := rows.Scan(
 			&item.ID,
 			&item.Type,
-			&item.ElapsedMilliseconds,
+			&item.OffsetMilliseconds,
+			&item.EndOffsetMilliseconds,
 			&item.Text,
-			&item.AuthorName,
+			&item.Speaker,
 			&item.LanguageCode,
-			&item.PublishedAt,
 		); err != nil {
 			return Page{}, err
 		}
@@ -114,14 +116,14 @@ func (r *Repository) Search(
 	if err := rows.Err(); err != nil {
 		return Page{}, err
 	}
-	page := Page{Items: items}
-	if len(items) > limit {
+	page := Page{Items: items, HasMore: len(items) > limit}
+	if page.HasMore {
 		last := items[limit-1]
 		page.Items = items[:limit]
 		value, _ := json.Marshal(cursor{
-			Elapsed: last.ElapsedMilliseconds,
-			Type:    last.Type,
-			ID:      last.ID,
+			Offset: last.OffsetMilliseconds,
+			Type:   last.Type,
+			ID:     last.ID,
 		})
 		next := base64.RawURLEncoding.EncodeToString(value)
 		page.NextCursor = &next
