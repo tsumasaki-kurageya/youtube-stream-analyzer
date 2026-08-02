@@ -23,7 +23,7 @@ h1 { margin: .25rem 0 .75rem; font-size: clamp(2rem, 5vw, 3.25rem); line-height:
 h2 { margin: .25rem 0 1rem; }
 .eyebrow { margin: 0; font-size: .78rem; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: #53627c; }
 
-form, .preview, .empty, .player-panel {
+form, .preview, .empty, .player-panel, .timeline-panel {
   background: #fff;
   border: 1px solid #dce2ec;
   border-radius: 1rem;
@@ -51,6 +51,21 @@ button.secondary { background: #eef1f7; color: #26344d; }
 .player-controls input { flex: 0 1 9rem; }
 .player-error { display: flex; flex-wrap: wrap; align-items: baseline; gap: .75rem; }
 
+.timeline-panel { margin-bottom: 1.5rem; }
+.timeline-heading { display: flex; justify-content: space-between; gap: 1rem; align-items: flex-start; }
+.timeline-heading p { margin-top: .25rem; }
+.timeline-columns { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+.timeline-columns > section { min-width: 0; }
+.timeline-columns h3 { margin: .25rem 0 .65rem; }
+.timeline-list { list-style: none; margin: 0; padding: .25rem; height: 22rem; overflow-y: auto; border: 1px solid #dce2ec; border-radius: .75rem; background: #f8f9fc; }
+.timeline-list li + li { margin-top: .25rem; }
+.timeline-list button { width: 100%; display: grid; grid-template-columns: 5.5rem 1fr; gap: .65rem; align-items: start; padding: .65rem; text-align: left; color: #172033; background: transparent; font-weight: 500; }
+.timeline-list button:hover, .timeline-list button:focus-visible { background: #edf1fb; outline: 2px solid #8094d9; }
+.timeline-list li[aria-current="true"] button { background: #dfe7ff; box-shadow: inset .25rem 0 #3a64dc; }
+.timeline-list time { font-variant-numeric: tabular-nums; color: #53627c; font-weight: 700; }
+.timeline-list span { display: grid; gap: .15rem; overflow-wrap: anywhere; }
+.timeline-empty { padding: .75rem; border-radius: .65rem; background: #f3f5f9; color: #53627c; }
+
 .preview { display: grid; grid-template-columns: minmax(15rem, 40%) 1fr; gap: 1.5rem; margin-top: 1.5rem; }
 .preview img { display: block; width: 100%; aspect-ratio: 16 / 9; object-fit: cover; border-radius: .75rem; background: #e9edf4; }
 dl { margin: 0 0 1.25rem; }
@@ -72,5 +87,8 @@ dd { margin: 0; font-weight: 650; }
   .input-row, .preview, .player-controls { display: flex; flex-direction: column; align-items: stretch; }
   .input-row button, .player-controls button { width: 100%; }
   .player-heading { align-items: center; }
+  .timeline-heading { flex-direction: column; }
+  .timeline-columns { grid-template-columns: 1fr; }
+  .timeline-list { height: 17rem; }
   .stream-item { grid-template-columns: 7rem 1fr; padding: .7rem; }
 }
