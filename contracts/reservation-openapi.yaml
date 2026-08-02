@@ -1,0 +1,189 @@
+openapi: 3.1.0
+info:
+  title: YouTube Stream Analyzer Reservation API
+  version: 0.4.0
+  description: M4解析予約の作成、一覧、詳細、キャンセル契約。実装完了時にMain API正本へ統合する。
+servers:
+  - url: /api
+paths:
+  /reservations:
+    post:
+      operationId: createReservation
+      summary: 開始前・配信中・終了直後のYouTube配信を予約する
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateReservationRequest' }
+      responses:
+        '200':
+          description: 同じ動画の既存terminal予約を再利用せず、新しい予約を返す場合は使用しない
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Reservation' }
+        '201':
+          description: 予約を作成
+          headers:
+            Location:
+              schema: { type: string }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Reservation' }
+        '400': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+        '409': { $ref: '#/components/responses/Problem' }
+        '502': { $ref: '#/components/responses/Problem' }
+        '503': { $ref: '#/components/responses/Problem' }
+    get:
+      operationId: listReservations
+      summary: 解析予約を作成日時降順で一覧取得する
+      parameters:
+        - name: state
+          in: query
+          schema: { $ref: '#/components/schemas/ReservationState' }
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 100, default: 50 }
+        - name: offset
+          in: query
+          schema: { type: integer, minimum: 0, default: 0 }
+      responses:
+        '200':
+          description: 予約一覧
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ReservationList' }
+        '400': { $ref: '#/components/responses/Problem' }
+        '500': { $ref: '#/components/responses/Problem' }
+  /reservations/{reservationId}:
+    get:
+      operationId: getReservation
+      summary: 解析予約の詳細と自動収集状態を取得する
+      parameters:
+        - $ref: '#/components/parameters/ReservationId'
+      responses:
+        '200':
+          description: 予約詳細
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Reservation' }
+        '404': { $ref: '#/components/responses/Problem' }
+        '500': { $ref: '#/components/responses/Problem' }
+  /reservations/{reservationId}/cancel:
+    post:
+      operationId: cancelReservation
+      summary: 自動収集開始前の予約をキャンセルする
+      parameters:
+        - $ref: '#/components/parameters/ReservationId'
+      responses:
+        '200':
+          description: キャンセル済み予約
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Reservation' }
+        '404': { $ref: '#/components/responses/Problem' }
+        '409': { $ref: '#/components/responses/Problem' }
+        '500': { $ref: '#/components/responses/Problem' }
+components:
+  parameters:
+    ReservationId:
+      name: reservationId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+  responses:
+    Problem:
+      description: RFC 9457 Problem Details
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/ProblemDetails' }
+  schemas:
+    CreateReservationRequest:
+      type: object
+      additionalProperties: false
+      required: [url]
+      properties:
+        url: { type: string, format: uri }
+    ReservationState:
+      type: string
+      enum:
+        - scheduled
+        - monitoring
+        - live
+        - waiting_for_archive
+        - collecting
+        - completed
+        - cancelled
+        - failed
+    CollectionStatus:
+      type: [string, 'null']
+      enum: [queued, running, succeeded, partial, failed, cancelled, null]
+    Reservation:
+      type: object
+      required:
+        - id
+        - youtubeVideoId
+        - sourceUrl
+        - state
+        - nextCheckAt
+        - monitorAttempt
+        - canCancel
+        - createdAt
+        - updatedAt
+      properties:
+        id: { type: string, format: uuid }
+        youtubeVideoId: { type: string, minLength: 11, maxLength: 11 }
+        sourceUrl: { type: string, format: uri }
+        state: { $ref: '#/components/schemas/ReservationState' }
+        scheduledStartAt: { type: [string, 'null'], format: date-time }
+        actualStartAt: { type: [string, 'null'], format: date-time }
+        actualEndAt: { type: [string, 'null'], format: date-time }
+        nextCheckAt: { type: string, format: date-time }
+        lastCheckedAt: { type: [string, 'null'], format: date-time }
+        monitorAttempt: { type: integer, minimum: 0 }
+        lastErrorCode: { type: [string, 'null'] }
+        lastErrorMessage: { type: [string, 'null'] }
+        lastErrorRetryable: { type: [boolean, 'null'] }
+        streamId: { type: [string, 'null'], format: uuid }
+        collectionJobId: { type: [string, 'null'], format: uuid }
+        collectionStatus: { $ref: '#/components/schemas/CollectionStatus' }
+        collectionErrorCode: { type: [string, 'null'] }
+        collectionErrorMessage: { type: [string, 'null'] }
+        canCancel: { type: boolean }
+        cancelledAt: { type: [string, 'null'], format: date-time }
+        completedAt: { type: [string, 'null'], format: date-time }
+        failedAt: { type: [string, 'null'], format: date-time }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    ReservationList:
+      type: object
+      required: [items, total, limit, offset]
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/Reservation' }
+        total: { type: integer, minimum: 0 }
+        limit: { type: integer, minimum: 1, maximum: 100 }
+        offset: { type: integer, minimum: 0 }
+    ProblemDetails:
+      type: object
+      required: [type, title, status, code]
+      properties:
+        type: { type: string, format: uri-reference }
+        title: { type: string }
+        status: { type: integer, minimum: 400, maximum: 599 }
+        detail: { type: string }
+        instance: { type: string, format: uri-reference }
+        code:
+          type: string
+          enum:
+            - INVALID_RESERVATION_URL
+            - RESERVATION_VIDEO_NOT_FOUND
+            - RESERVATION_ALREADY_ACTIVE
+            - RESERVATION_NOT_FOUND
+            - RESERVATION_NOT_CANCELLABLE
+            - RESERVATION_MONITORING_FAILED
+            - YOUTUBE_ACCESS_DENIED
+            - YOUTUBE_QUOTA_EXCEEDED
+            - YOUTUBE_TEMPORARILY_UNAVAILABLE
+            - INTERNAL_ERROR
