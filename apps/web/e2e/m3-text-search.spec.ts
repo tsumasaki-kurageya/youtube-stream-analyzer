@@ -61,14 +61,15 @@ test('チャットと字幕を横断検索し結果から動画時刻へ移動�
       json: {
         items: [
           {
-            id: 'chat-1', type: 'chat', elapsedMilliseconds: 125000,
-            text: '重要なチャット発言', authorName: 'alice',
+            id: 'chat-1', type: 'chat', offsetMilliseconds: 125000,
+            text: '重要なチャット発言', speaker: 'alice',
           },
           {
-            id: 'transcript-1', type: 'transcript', elapsedMilliseconds: 180000,
-            text: '重要な字幕です', languageCode: 'ja',
+            id: 'transcript-1', type: 'transcript', offsetMilliseconds: 180000,
+            endOffsetMilliseconds: 182000, text: '重要な字幕です', languageCode: 'ja',
           },
         ],
+        hasMore: false,
       },
     });
   });
@@ -98,19 +99,23 @@ test('検索0件とカーソルページングを表示する', async ({ page })
   await page.route(`**/api/streams/${stream.id}/search?*`, (route) => {
     const url = new URL(route.request().url());
     if (url.searchParams.get('q') === 'なし') {
-      route.fulfill({ json: { items: [] } });
+      route.fulfill({ json: { items: [], hasMore: false } });
       return;
     }
     if (url.searchParams.has('cursor')) {
       route.fulfill({
-        json: { items: [{ id: '2', type: 'transcript', elapsedMilliseconds: 2000, text: '続き', languageCode: 'ja' }] },
+        json: {
+          items: [{ id: '2', type: 'transcript', offsetMilliseconds: 2000, text: '続き', languageCode: 'ja' }],
+          hasMore: false,
+        },
       });
       return;
     }
     route.fulfill({
       json: {
-        items: [{ id: '1', type: 'chat', elapsedMilliseconds: 1000, text: '最初', authorName: 'alice' }],
+        items: [{ id: '1', type: 'chat', offsetMilliseconds: 1000, text: '最初', speaker: 'alice' }],
         nextCursor: 'next',
+        hasMore: true,
       },
     });
   });
@@ -124,5 +129,5 @@ test('検索0件とカーソルページングを表示する', async ({ page })
   await expect(page.getByRole('button', { name: '次の50件を読み込む' })).toBeVisible();
   await page.getByRole('button', { name: '次の50件を読み込む' }).click();
   await expect(page.getByText('続き')).toBeVisible();
-  await expect(page.getByRole('listitem')).toHaveCount(2);
+  await expect(page.getByRole('list', { name: 'チャット・字幕検索結果' }).getByRole('listitem')).toHaveCount(2);
 });
