@@ -62,18 +62,31 @@ class JobStore:
         ):
             row = connection.execute(
                 """
-                WITH candidate AS (
-                    SELECT s.id
+                WITH ranked AS (
+                    SELECT s.*,
+                        CASE s.name
+                            WHEN 'metadata' THEN 1
+                            WHEN 'chat_replay' THEN 2
+                            WHEN 'transcript' THEN 3
+                            ELSE 100
+                        END AS step_rank
                     FROM collection.collection_steps s
+                ), candidate AS (
+                    SELECT s.id
+                    FROM ranked s
                     JOIN collection.collection_jobs j ON j.id=s.job_id
                     WHERE s.status='queued'
                       AND NOT EXISTS (
-                        SELECT 1 FROM collection.collection_steps previous
+                        SELECT 1 FROM ranked previous
                         WHERE previous.job_id=s.job_id
-                          AND previous.created_at < s.created_at
-                          AND previous.status IN ('queued','running')
+                          AND previous.step_rank < s.step_rank
+                          AND previous.status NOT IN ('succeeded','no_data','cancelled')
                       )
-                    ORDER BY j.created_at, s.created_at, s.id
+                      AND NOT EXISTS (
+                        SELECT 1 FROM collection.collection_steps active
+                        WHERE active.job_id=s.job_id AND active.status='running'
+                      )
+                    ORDER BY j.created_at, s.step_rank, s.id
                     FOR UPDATE OF s SKIP LOCKED
                     LIMIT 1
                 )
