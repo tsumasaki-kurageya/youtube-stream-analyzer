@@ -7,6 +7,7 @@ import threading
 import psycopg
 
 from ysa_worker.config import Settings
+from ysa_worker.jobs import ClaimedJob, JobRunner, JobStore, ProgressReporter
 from ysa_worker.logging import configure_logging
 
 LOGGER = logging.getLogger("ysa.worker")
@@ -23,11 +24,19 @@ def verify_database(database_url: str) -> None:
             raise RuntimeError("database self-check returned an unexpected result")
 
 
+def pending_chat_handler(_job: ClaimedJob, _report_progress: ProgressReporter) -> None:
+    raise RuntimeError("chat replay collector is not implemented yet")
+
+
 def run(settings: Settings, stop_event: threading.Event) -> None:
     verify_database(settings.database_url)
+    store = JobStore(settings.database_url, settings.worker_id, settings.lease_seconds)
+    runner = JobRunner(store, pending_chat_handler, settings.heartbeat_interval_seconds)
     LOGGER.info("worker ready", extra={"worker_id": settings.worker_id})
-    while not stop_event.wait(settings.poll_interval_seconds):
-        LOGGER.debug("worker heartbeat", extra={"worker_id": settings.worker_id})
+    while not stop_event.is_set():
+        processed = runner.run_once()
+        if not processed:
+            stop_event.wait(settings.poll_interval_seconds)
     LOGGER.info("worker stopped", extra={"worker_id": settings.worker_id})
 
 

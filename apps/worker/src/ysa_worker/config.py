@@ -9,6 +9,8 @@ class Settings:
     database_url: str
     worker_id: str
     poll_interval_seconds: float
+    heartbeat_interval_seconds: float
+    lease_seconds: int
 
     @classmethod
     def from_environment(cls) -> Settings:
@@ -20,16 +22,27 @@ class Settings:
         if not worker_id:
             raise ValueError("YSA_WORKER_ID must not be empty")
 
-        raw_interval = os.environ.get("YSA_WORKER_POLL_INTERVAL_SECONDS", "3")
-        try:
-            poll_interval = float(raw_interval)
-        except ValueError as error:
-            raise ValueError("YSA_WORKER_POLL_INTERVAL_SECONDS must be numeric") from error
-        if poll_interval <= 0:
-            raise ValueError("YSA_WORKER_POLL_INTERVAL_SECONDS must be positive")
+        poll_interval = _positive_float("YSA_WORKER_POLL_INTERVAL_SECONDS", "3")
+        heartbeat_interval = _positive_float("YSA_WORKER_HEARTBEAT_INTERVAL_SECONDS", "30")
+        lease_seconds = int(_positive_float("YSA_WORKER_LEASE_SECONDS", "120"))
+        if heartbeat_interval >= lease_seconds:
+            raise ValueError("heartbeat interval must be shorter than the lease")
 
         return cls(
             database_url=database_url,
             worker_id=worker_id,
             poll_interval_seconds=poll_interval,
+            heartbeat_interval_seconds=heartbeat_interval,
+            lease_seconds=lease_seconds,
         )
+
+
+def _positive_float(name: str, default: str) -> float:
+    raw_value = os.environ.get(name, default)
+    try:
+        value = float(raw_value)
+    except ValueError as error:
+        raise ValueError(f"{name} must be numeric") from error
+    if value <= 0:
+        raise ValueError(f"{name} must be positive")
+    return value
