@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import threading
+from collections.abc import Iterator
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlparse
 
@@ -102,7 +103,7 @@ class FixtureHandler(BaseHTTPRequestHandler):
 
 
 @pytest.fixture
-def fixture_url() -> str:
+def fixture_url() -> Iterator[str]:
     server = ThreadingHTTPServer(("127.0.0.1", 0), FixtureHandler)
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
