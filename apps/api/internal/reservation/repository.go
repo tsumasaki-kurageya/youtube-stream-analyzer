@@ -3,6 +3,7 @@ package reservation
 import (
 	"context"
 	"errors"
+	"strconv"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -17,39 +18,39 @@ var (
 )
 
 type Reservation struct {
-	ID                 string
-	YouTubeVideoID     string
-	SourceURL           string
-	State               string
-	ScheduledStartAt    *time.Time
-	ActualStartAt       *time.Time
-	ActualEndAt         *time.Time
-	NextCheckAt         time.Time
-	LastCheckedAt       *time.Time
-	MonitorAttempt      int
-	LastErrorCode       *string
-	LastErrorMessage    *string
-	LastErrorRetryable  *bool
-	StreamID            *string
-	CollectionJobID     *string
-	CollectionStatus    *string
-	CollectionErrorCode *string
-	CollectionErrorMessage *string
-	CancelledAt         *time.Time
-	CompletedAt         *time.Time
-	FailedAt            *time.Time
-	CreatedAt           time.Time
-	UpdatedAt           time.Time
+	ID                     string
+	YouTubeVideoID         string
+	SourceURL               string
+	State                   string
+	ScheduledStartAt        *time.Time
+	ActualStartAt           *time.Time
+	ActualEndAt             *time.Time
+	NextCheckAt             time.Time
+	LastCheckedAt           *time.Time
+	MonitorAttempt          int
+	LastErrorCode           *string
+	LastErrorMessage        *string
+	LastErrorRetryable      *bool
+	StreamID                *string
+	CollectionJobID         *string
+	CollectionStatus        *string
+	CollectionErrorCode     *string
+	CollectionErrorMessage  *string
+	CancelledAt             *time.Time
+	CompletedAt             *time.Time
+	FailedAt                *time.Time
+	CreatedAt               time.Time
+	UpdatedAt               time.Time
 }
 
 type CreateInput struct {
-	YouTubeVideoID  string
-	SourceURL       string
-	State           string
+	YouTubeVideoID   string
+	SourceURL        string
+	State            string
 	ScheduledStartAt *time.Time
-	ActualStartAt   *time.Time
-	ActualEndAt     *time.Time
-	NextCheckAt     time.Time
+	ActualStartAt    *time.Time
+	ActualEndAt      *time.Time
+	NextCheckAt      time.Time
 }
 
 type Repository struct{ db *pgxpool.Pool }
@@ -69,67 +70,105 @@ LEFT JOIN collection.collection_jobs j ON j.id=r.collection_job_id`
 func scan(row pgx.Row) (Reservation, error) {
 	var value Reservation
 	err := row.Scan(
-		&value.ID,&value.YouTubeVideoID,&value.SourceURL,&value.State,
-		&value.ScheduledStartAt,&value.ActualStartAt,&value.ActualEndAt,&value.NextCheckAt,
-		&value.LastCheckedAt,&value.MonitorAttempt,&value.LastErrorCode,&value.LastErrorMessage,
-		&value.LastErrorRetryable,&value.StreamID,&value.CollectionJobID,
-		&value.CollectionStatus,&value.CollectionErrorCode,&value.CollectionErrorMessage,
-		&value.CancelledAt,&value.CompletedAt,&value.FailedAt,&value.CreatedAt,&value.UpdatedAt,
+		&value.ID,
+		&value.YouTubeVideoID,
+		&value.SourceURL,
+		&value.State,
+		&value.ScheduledStartAt,
+		&value.ActualStartAt,
+		&value.ActualEndAt,
+		&value.NextCheckAt,
+		&value.LastCheckedAt,
+		&value.MonitorAttempt,
+		&value.LastErrorCode,
+		&value.LastErrorMessage,
+		&value.LastErrorRetryable,
+		&value.StreamID,
+		&value.CollectionJobID,
+		&value.CollectionStatus,
+		&value.CollectionErrorCode,
+		&value.CollectionErrorMessage,
+		&value.CancelledAt,
+		&value.CompletedAt,
+		&value.FailedAt,
+		&value.CreatedAt,
+		&value.UpdatedAt,
 	)
 	return value, err
 }
 
 func (r *Repository) Create(ctx context.Context, input CreateInput) (Reservation, error) {
 	tx, err := r.db.Begin(ctx)
-	if err != nil { return Reservation{}, err }
+	if err != nil {
+		return Reservation{}, err
+	}
 	defer tx.Rollback(ctx)
+
 	var id string
 	err = tx.QueryRow(ctx, `
 		INSERT INTO reservation.reservations(
 			youtube_video_id,source_url,state,scheduled_start_at,actual_start_at,
 			actual_end_at,next_check_at
-		) VALUES($1,$2,$3,$4,$5,$6,$7) RETURNING id::text
-	`, input.YouTubeVideoID,input.SourceURL,input.State,input.ScheduledStartAt,
-		input.ActualStartAt,input.ActualEndAt,input.NextCheckAt).Scan(&id)
+		) VALUES($1,$2,$3,$4,$5,$6,$7)
+		RETURNING id::text
+	`, input.YouTubeVideoID, input.SourceURL, input.State, input.ScheduledStartAt,
+		input.ActualStartAt, input.ActualEndAt, input.NextCheckAt).Scan(&id)
 	if err != nil {
 		var pgErr *pgconn.PgError
-		if errors.As(err, &pgErr) && pgErr.Code == "23505" { return Reservation{}, ErrAlreadyActive }
+		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
+			return Reservation{}, ErrAlreadyActive
+		}
 		return Reservation{}, err
 	}
-	_, err = tx.Exec(ctx, `
+	if _, err = tx.Exec(ctx, `
 		INSERT INTO reservation.reservation_transitions(
 			reservation_id,from_state,to_state,reason_code
 		) VALUES($1,NULL,$2,'reservation_created')
-	`, id, input.State)
-	if err != nil { return Reservation{}, err }
-	if err := tx.Commit(ctx); err != nil { return Reservation{}, err }
+	`, id, input.State); err != nil {
+		return Reservation{}, err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return Reservation{}, err
+	}
 	return r.Get(ctx, id)
 }
 
 func (r *Repository) Get(ctx context.Context, id string) (Reservation, error) {
 	value, err := scan(r.db.QueryRow(ctx, selectReservation+` WHERE r.id=$1`, id))
-	if errors.Is(err, pgx.ErrNoRows) { return Reservation{}, ErrNotFound }
+	if errors.Is(err, pgx.ErrNoRows) {
+		return Reservation{}, ErrNotFound
+	}
 	return value, err
 }
 
 func (r *Repository) List(ctx context.Context, state string, limit, offset int) ([]Reservation, int, error) {
 	where := ""
-	args := []any{}
-	if state != "" { where = " WHERE r.state=$1"; args = append(args, state) }
+	args := make([]any, 0, 3)
+	if state != "" {
+		where = " WHERE r.state=$1"
+		args = append(args, state)
+	}
 	var total int
 	if err := r.db.QueryRow(ctx, `SELECT count(*) FROM reservation.reservations r`+where, args...).Scan(&total); err != nil {
 		return nil, 0, err
 	}
 	args = append(args, limit, offset)
-	limitPos := len(args)-1
-	offsetPos := len(args)
-	rows, err := r.db.Query(ctx, selectReservation+where+` ORDER BY r.created_at DESC,r.id DESC LIMIT $`+itoa(limitPos)+` OFFSET $`+itoa(offsetPos), args...)
-	if err != nil { return nil, 0, err }
+	limitPos := strconv.Itoa(len(args) - 1)
+	offsetPos := strconv.Itoa(len(args))
+	rows, err := r.db.Query(ctx,
+		selectReservation+where+` ORDER BY r.created_at DESC,r.id DESC LIMIT $`+limitPos+` OFFSET $`+offsetPos,
+		args...,
+	)
+	if err != nil {
+		return nil, 0, err
+	}
 	defer rows.Close()
 	items := make([]Reservation, 0, limit)
 	for rows.Next() {
 		value, err := scan(rows)
-		if err != nil { return nil, 0, err }
+		if err != nil {
+			return nil, 0, err
+		}
 		items = append(items, value)
 	}
 	return items, total, rows.Err()
@@ -137,34 +176,50 @@ func (r *Repository) List(ctx context.Context, state string, limit, offset int) 
 
 func (r *Repository) Cancel(ctx context.Context, id string) (Reservation, error) {
 	tx, err := r.db.Begin(ctx)
-	if err != nil { return Reservation{}, err }
+	if err != nil {
+		return Reservation{}, err
+	}
 	defer tx.Rollback(ctx)
+
 	var fromState string
 	err = tx.QueryRow(ctx, `
-		UPDATE reservation.reservations
-		SET state='cancelled',cancelled_at=now(),worker_id=NULL,lease_expires_at=NULL,
-		    heartbeat_at=NULL,revision=revision+1,updated_at=now()
-		WHERE id=$1 AND state IN ('scheduled','monitoring','live','waiting_for_archive')
-		RETURNING state::text
+		WITH current AS (
+			SELECT id,state FROM reservation.reservations
+			WHERE id=$1 AND state IN ('scheduled','monitoring','live','waiting_for_archive')
+			FOR UPDATE
+		), updated AS (
+			UPDATE reservation.reservations r
+			SET state='cancelled',cancelled_at=now(),worker_id=NULL,lease_expires_at=NULL,
+			    heartbeat_at=NULL,revision=revision+1,updated_at=now()
+			FROM current c WHERE r.id=c.id
+			RETURNING c.state
+		)
+		SELECT state FROM updated
 	`, id).Scan(&fromState)
 	if errors.Is(err, pgx.ErrNoRows) {
 		var exists bool
-		if lookupErr := tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM reservation.reservations WHERE id=$1)`, id).Scan(&exists); lookupErr != nil { return Reservation{}, lookupErr }
-		if !exists { return Reservation{}, ErrNotFound }
+		if lookupErr := tx.QueryRow(ctx,
+			`SELECT EXISTS(SELECT 1 FROM reservation.reservations WHERE id=$1)`, id,
+		).Scan(&exists); lookupErr != nil {
+			return Reservation{}, lookupErr
+		}
+		if !exists {
+			return Reservation{}, ErrNotFound
+		}
 		return Reservation{}, ErrNotCancellable
 	}
-	if err != nil { return Reservation{}, err }
-	_, err = tx.Exec(ctx, `
+	if err != nil {
+		return Reservation{}, err
+	}
+	if _, err = tx.Exec(ctx, `
 		INSERT INTO reservation.reservation_transitions(
 			reservation_id,from_state,to_state,reason_code
-		) SELECT id,$2,'cancelled','user_cancelled' FROM reservation.reservations WHERE id=$1
-	`, id, fromState)
-	if err != nil { return Reservation{}, err }
-	if err := tx.Commit(ctx); err != nil { return Reservation{}, err }
+		) VALUES($1,$2,'cancelled','user_cancelled')
+	`, id, fromState); err != nil {
+		return Reservation{}, err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return Reservation{}, err
+	}
 	return r.Get(ctx, id)
-}
-
-func itoa(value int) string {
-	if value < 10 { return string(rune('0' + value)) }
-	return "10"
 }
