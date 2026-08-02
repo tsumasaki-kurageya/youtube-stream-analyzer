@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 import threading
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlparse
 
@@ -15,7 +15,7 @@ from ysa_worker.chat_replay import (
     parse_page,
 )
 
-STARTED_AT = datetime(2026, 1, 1, 10, 0, tzinfo=timezone.utc)
+STARTED_AT = datetime(2026, 1, 1, 10, 0, tzinfo=UTC)
 
 
 def renderer(message_id: str, timestamp_usec: str | None, text: str) -> dict[str, object]:
@@ -27,11 +27,7 @@ def renderer(message_id: str, timestamp_usec: str | None, text: str) -> dict[str
     }
     if timestamp_usec is not None:
         value["timestampUsec"] = timestamp_usec
-    return {
-        "addChatItemAction": {
-            "item": {"liveChatTextMessageRenderer": value}
-        }
-    }
+    return {"addChatItemAction": {"item": {"liveChatTextMessageRenderer": value}}}
 
 
 def test_parse_page_normalizes_time_and_skips_missing_timestamp() -> None:
