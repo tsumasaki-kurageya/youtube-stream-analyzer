@@ -23,20 +23,21 @@ def main() -> None:
     worker = threading.Thread(
         target=run,
         args=(Settings.from_environment(), stop_event),
-        daemon=True,
+        daemon=False,
     )
     worker.start()
 
     server = ThreadingHTTPServer(("127.0.0.1", 18082), HealthHandler)
+    server.timeout = 0.2
 
     def stop(_signum: int, _frame: object) -> None:
         stop_event.set()
-        server.shutdown()
 
     signal.signal(signal.SIGINT, stop)
     signal.signal(signal.SIGTERM, stop)
     try:
-        server.serve_forever()
+        while not stop_event.is_set():
+            server.handle_request()
     finally:
         stop_event.set()
         worker.join(timeout=5)
