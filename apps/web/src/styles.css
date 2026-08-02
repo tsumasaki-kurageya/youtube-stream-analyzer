@@ -23,7 +23,7 @@ h1 { margin: .25rem 0 .75rem; font-size: clamp(2rem, 5vw, 3.25rem); line-height:
 h2 { margin: .25rem 0 1rem; }
 .eyebrow { margin: 0; font-size: .78rem; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: #53627c; }
 
-form, .preview, .empty, .player-panel, .timeline-panel {
+form, .preview, .empty, .player-panel, .timeline-panel, .search-panel {
   background: #fff;
   border: 1px solid #dce2ec;
   border-radius: 1rem;
@@ -66,6 +66,17 @@ button.secondary { background: #eef1f7; color: #26344d; }
 .timeline-list span { display: grid; gap: .15rem; overflow-wrap: anywhere; }
 .timeline-empty { padding: .75rem; border-radius: .65rem; background: #f3f5f9; color: #53627c; }
 
+.search-panel { margin-bottom: 1.5rem; }
+.search-heading p { margin-top: .25rem; }
+.search-panel input[type="search"] { width: 100%; }
+.search-results { list-style: none; margin: 1rem 0; padding: 0; display: grid; gap: .4rem; max-height: 28rem; overflow-y: auto; }
+.search-results button { width: 100%; display: grid; gap: .25rem; text-align: left; color: #172033; background: #f8f9fc; border: 1px solid #e1e6ef; font-weight: 500; }
+.search-results button:hover, .search-results button:focus-visible { background: #edf1fb; border-color: #8094d9; outline: 2px solid rgb(58 100 220 / 18%); }
+.search-result-meta { color: #53627c; font-size: .85rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+.search-result-text { overflow-wrap: anywhere; }
+.search-results mark { background: #fff1a8; color: inherit; padding: 0 .08em; }
+.search-empty { padding: .9rem; border-radius: .65rem; background: #f3f5f9; color: #53627c; }
+
 .preview { display: grid; grid-template-columns: minmax(15rem, 40%) 1fr; gap: 1.5rem; margin-top: 1.5rem; }
 .preview img { display: block; width: 100%; aspect-ratio: 16 / 9; object-fit: cover; border-radius: .75rem; background: #e9edf4; }
 dl { margin: 0 0 1.25rem; }
@@ -90,5 +101,6 @@ dd { margin: 0; font-weight: 650; }
   .timeline-heading { flex-direction: column; }
   .timeline-columns { grid-template-columns: 1fr; }
   .timeline-list { height: 17rem; }
+  .search-results { max-height: 22rem; }
   .stream-item { grid-template-columns: 7rem 1fr; padding: .7rem; }
 }
