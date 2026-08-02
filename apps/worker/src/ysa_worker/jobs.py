@@ -90,7 +90,7 @@ class JobStore:
             )
             UPDATE collection.collection_steps s
             SET status='running', worker_id=%s,
-                started_at=COALESCE(started_at,now()), heartbeat_at=now(),
+                started_at=COALESCE(s.started_at,now()), heartbeat_at=now(),
                 lease_expires_at=now()+%s::interval, updated_at=now()
             FROM candidate, collection.collection_jobs j
             WHERE s.id=candidate.id AND j.id=s.job_id
