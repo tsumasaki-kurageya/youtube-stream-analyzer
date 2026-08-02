@@ -1,4 +1,10 @@
-import { expect, test, type Page, type TestInfo } from '@playwright/test';
+import {
+  expect,
+  test,
+  type APIRequestContext,
+  type Page,
+  type TestInfo,
+} from '@playwright/test';
 
 function videoId(prefix: 'fullflow' | 'failchat', testInfo: TestInfo) {
   return `${prefix}${String(testInfo.retry).padStart(3, '0')}`;
@@ -18,11 +24,19 @@ async function waitForCollection(page: Page, status: '収集完了' | '収集失
   await expect(page.getByRole('status').filter({ hasText: status })).toBeVisible({ timeout: 20_000 });
 }
 
+async function waitForMessages(request: APIRequestContext, streamId: string) {
+  await expect.poll(async () => {
+    const response = await request.get(`/api/streams/${streamId}/chat-messages?limit=100`);
+    if (!response.ok()) return -1;
+    const body = (await response.json()) as { items: unknown[] };
+    return body.items.length;
+  }, { timeout: 20_000 }).toBe(3);
+}
+
 async function openChat(page: Page, streamId: string) {
   await page.getByRole('button', { name: '収集したチャットを見る' }).click();
   await expect(page).toHaveURL(`/streams/${streamId}/chat`);
-  await page.reload();
-  await expect(page.getByRole('heading', { name: 'チャット時系列' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'チャット時系列' })).toBeVisible({ timeout: 10_000 });
 }
 
 test('M2の収集開始から時系列閲覧と冪等な再収集まで完了する', async ({ page, request }, testInfo) => {
@@ -34,6 +48,7 @@ test('M2の収集開始から時系列閲覧と冪等な再収集まで完了す
   await expect(page.getByRole('heading', { name: 'チャット収集' })).toBeVisible();
   await waitForCollection(page, '収集完了');
   await expect(page.getByText('3件')).toBeVisible();
+  await waitForMessages(request, streamId);
 
   await openChat(page, streamId);
   await expect(page.locator('.chat-message')).toHaveCount(3);
@@ -51,13 +66,14 @@ test('M2の収集開始から時系列閲覧と冪等な再収集まで完了す
   expect((await messages.json()).items).toHaveLength(3);
 });
 
-test('失敗理由を表示し再実行で完了する', async ({ page }, testInfo) => {
+test('失敗理由を表示し再実行で完了する', async ({ page, request }, testInfo) => {
   const streamId = await registerStream(page, videoId('failchat', testInfo));
   await page.getByRole('button', { name: 'チャット収集を開始' }).click();
   await waitForCollection(page, '収集失敗');
   await expect(page.getByText(/temporarily unavailable|request failed|一時/)).toBeVisible();
   await page.getByRole('button', { name: 'チャット収集を再実行' }).click();
   await waitForCollection(page, '収集完了');
+  await waitForMessages(request, streamId);
   await openChat(page, streamId);
   await expect(page.locator('.chat-message')).toHaveCount(3);
 });
