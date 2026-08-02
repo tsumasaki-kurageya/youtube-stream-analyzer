@@ -1,11 +1,13 @@
 GRAPHIFY_BIN ?= graphify
 GRAPHIFY_EXTRACT_ARGS ?= --code-only
+PYTHON ?= python3
 
-.PHONY: setup dev dev-stop dev-logs db-up db-down db-migrate db-rollback api web test lint format check graphify graphify-update
+.PHONY: setup dev dev-stop dev-logs db-up db-down db-migrate db-rollback api web worker worker-check test lint format check graphify graphify-update
 
 setup:
 	cd apps/web && npm install
 	cd apps/api && go mod download
+	cd apps/worker && $(PYTHON) -m pip install -e '.[dev]'
 
 db-up:
 	docker compose up -d postgres
@@ -25,11 +27,18 @@ api:
 web:
 	cd apps/web && npm run dev
 
+worker:
+	cd apps/worker && $(PYTHON) -m ysa_worker.main
+
+worker-check:
+	cd apps/worker && ruff check . && mypy src tests && pytest
+
 dev: db-up db-migrate
 	@set -eu; \
 	trap 'kill 0' INT TERM EXIT; \
 	(cd apps/api && go run ./cmd/api) & \
 	(cd apps/web && npm run dev) & \
+	(cd apps/worker && $(PYTHON) -m ysa_worker.main) & \
 	wait
 
 dev-stop:
@@ -41,18 +50,22 @@ dev-logs:
 test:
 	cd apps/api && go test ./...
 	cd apps/web && npm test
+	cd apps/worker && pytest
 
 lint:
 	cd apps/api && gofmt -l . | tee /tmp/ysa-gofmt.txt; test ! -s /tmp/ysa-gofmt.txt
 	cd apps/web && npm run typecheck
+	cd apps/worker && ruff check . && mypy src tests
 
 format:
 	cd apps/api && gofmt -w .
+	cd apps/worker && ruff format .
 
 check:
 	@bash scripts/check-repository.sh
 	cd apps/api && go test ./...
 	cd apps/web && npm run typecheck && npm run build
+	$(MAKE) worker-check
 
 graphify:
 	@command -v "$(GRAPHIFY_BIN)" >/dev/null 2>&1 || { \
