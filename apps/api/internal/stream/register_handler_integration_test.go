@@ -25,7 +25,7 @@ func TestRegisterHandlerIsIdempotentAndConcurrent(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer db.Close()
-	if _, err := db.Exec(context.Background(), "TRUNCATE stream.streams"); err != nil {
+	if _, err := db.Exec(context.Background(), "TRUNCATE stream.streams CASCADE"); err != nil {
 		t.Fatal(err)
 	}
 

@@ -23,7 +23,7 @@ func TestRepositoryInsertGetList(t *testing.T) {
 	}
 	defer db.Close()
 
-	if _, err := db.Exec(ctx, "TRUNCATE stream.streams"); err != nil {
+	if _, err := db.Exec(ctx, "TRUNCATE stream.streams CASCADE"); err != nil {
 		t.Fatal(err)
 	}
 
