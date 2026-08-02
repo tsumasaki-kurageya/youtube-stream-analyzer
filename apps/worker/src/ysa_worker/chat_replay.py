@@ -130,8 +130,10 @@ def _find_actions(payload: dict[str, Any]) -> list[Any]:
     continuation = payload.get("continuationContents")
     if isinstance(continuation, dict):
         chat = continuation.get("liveChatContinuation")
-        if isinstance(chat, dict) and isinstance(chat.get("actions"), list):
-            return chat["actions"]
+        if isinstance(chat, dict):
+            actions = chat.get("actions")
+            if isinstance(actions, list):
+                return actions
     raise ChatReplayProtocolError("chat replay actions are missing")
 
 
