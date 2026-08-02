@@ -38,7 +38,7 @@ type Repository struct{ db *pgxpool.Pool }
 
 func NewRepository(db *pgxpool.Pool) *Repository { return &Repository{db: db} }
 
-func (r *Repository) List(ctx context.Context, streamID string, limit int, cursorValue string) (Page, error) {
+func (r *Repository) List(ctx context.Context, streamID string, limit int, cursorValue string, fromMS, toMS *int64) (Page, error) {
 	var exists bool
 	if err := r.db.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM stream.streams WHERE id=$1)`, streamID).Scan(&exists); err != nil {
 		return Page{}, err
@@ -50,12 +50,20 @@ func (r *Repository) List(ctx context.Context, streamID string, limit int, curso
 	query := `SELECT id,external_message_id,author_external_id,author_name,message_text,published_at,elapsed_milliseconds
 		FROM chat.chat_messages WHERE stream_id=$1`
 	args := []any{streamID}
+	if fromMS != nil {
+		query += fmt.Sprintf(` AND elapsed_milliseconds >= $%d`, len(args)+1)
+		args = append(args, *fromMS)
+	}
+	if toMS != nil {
+		query += fmt.Sprintf(` AND elapsed_milliseconds < $%d`, len(args)+1)
+		args = append(args, *toMS)
+	}
 	if cursorValue != "" {
 		after, err := decodeCursor(cursorValue)
 		if err != nil {
 			return Page{}, err
 		}
-		query += ` AND (elapsed_milliseconds,published_at,external_message_id) > ($2,$3,$4)`
+		query += fmt.Sprintf(` AND (elapsed_milliseconds,published_at,external_message_id) > ($%d,$%d,$%d)`, len(args)+1, len(args)+2, len(args)+3)
 		args = append(args, after.Elapsed, after.Published, after.External)
 	}
 	query += fmt.Sprintf(` ORDER BY elapsed_milliseconds,published_at,external_message_id LIMIT $%d`, len(args)+1)
