@@ -48,7 +48,7 @@ dev-logs:
 	docker compose logs -f postgres
 
 test:
-	cd apps/api && go test ./...
+	cd apps/api && go test -p 1 ./...
 	cd apps/web && npm test
 	cd apps/worker && pytest
 
@@ -63,7 +63,7 @@ format:
 
 check:
 	@bash scripts/check-repository.sh
-	cd apps/api && go test ./...
+	cd apps/api && go test -p 1 ./...
 	cd apps/web && npm run typecheck && npm run build
 	$(MAKE) worker-check
 
