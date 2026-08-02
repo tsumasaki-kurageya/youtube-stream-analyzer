@@ -218,7 +218,7 @@ export function YouTubePlayer({
       )}
       <div className="player-controls" aria-label="動画再生操作">
         <button type="button" onClick={() => adapterRef.current?.play()} disabled={state !== 'ready'}>再生</button>
-        <button type="button" className="secondary" onClick={() => adapterRef.current?.pause()} disabled={state !== 'ready'}>一時停止</button>
+        <button type="button" className="secondary" onClick={() => adapterRef.current?.pause()} disabled={state !== 'ready'}>停止</button>
         <label htmlFor="seek-seconds">動画内時刻（秒）</label>
         <input
           id="seek-seconds"
