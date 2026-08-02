@@ -36,7 +36,7 @@ async function waitForMessages(request: APIRequestContext, streamId: string) {
 async function openChat(page: Page, streamId: string) {
   await page.getByRole('button', { name: '収集したチャットを見る' }).click();
   await expect(page).toHaveURL(`/streams/${streamId}/chat`);
-  await expect(page.getByRole('heading', { name: 'チャット時系列' })).toBeVisible({ timeout: 10_000 });
+  await expect(page.getByRole('list', { name: 'チャット時系列' })).toBeVisible({ timeout: 10_000 });
 }
 
 test('M2の収集開始から時系列閲覧と冪等な再収集まで完了する', async ({ page, request }, testInfo) => {
