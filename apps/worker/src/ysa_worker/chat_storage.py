@@ -34,21 +34,23 @@ class ChatMessageRepository:
             return 0
 
         inserted = 0
-        with psycopg.connect(self.database_url) as connection:
-            with connection.cursor() as cursor:
-                for row in rows:
-                    cursor.execute(
-                        """
-                        INSERT INTO chat.chat_messages(
-                            stream_id, collection_job_id, external_message_id,
-                            author_external_id, author_name, message_text,
-                            published_at, elapsed_milliseconds
-                        ) VALUES(%s,%s,%s,%s,%s,%s,%s,%s)
-                        ON CONFLICT (stream_id, external_message_id) DO NOTHING
-                        RETURNING id
-                        """,
-                        row,
-                    )
-                    if cursor.fetchone() is not None:
-                        inserted += 1
+        with (
+            psycopg.connect(self.database_url) as connection,
+            connection.cursor() as cursor,
+        ):
+            for row in rows:
+                cursor.execute(
+                    """
+                    INSERT INTO chat.chat_messages(
+                        stream_id, collection_job_id, external_message_id,
+                        author_external_id, author_name, message_text,
+                        published_at, elapsed_milliseconds
+                    ) VALUES(%s,%s,%s,%s,%s,%s,%s,%s)
+                    ON CONFLICT (stream_id, external_message_id) DO NOTHING
+                    RETURNING id
+                    """,
+                    row,
+                )
+                if cursor.fetchone() is not None:
+                    inserted += 1
         return inserted
