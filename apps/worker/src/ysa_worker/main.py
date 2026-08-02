@@ -3,9 +3,11 @@ from __future__ import annotations
 import logging
 import signal
 import threading
+from datetime import datetime
 
 import psycopg
 
+from ysa_worker.chat_replay import ChatReplayGateway, collect_all
 from ysa_worker.config import Settings
 from ysa_worker.jobs import ClaimedJob, JobRunner, JobStore, ProgressReporter
 from ysa_worker.logging import configure_logging
@@ -24,14 +26,44 @@ def verify_database(database_url: str) -> None:
             raise RuntimeError("database self-check returned an unexpected result")
 
 
-def pending_chat_handler(_job: ClaimedJob, _report_progress: ProgressReporter) -> None:
-    raise RuntimeError("chat replay collector is not implemented yet")
+def chat_handler(
+    database_url: str,
+    gateway: ChatReplayGateway,
+    job: ClaimedJob,
+    report_progress: ProgressReporter,
+) -> None:
+    with psycopg.connect(database_url) as connection:
+        row = connection.execute(
+            """
+            SELECT youtube_video_id, actual_start_at
+            FROM stream.streams WHERE id=%s
+            """,
+            (job.stream_id,),
+        ).fetchone()
+    if row is None:
+        raise RuntimeError("stream metadata is missing")
+    video_id, started_at = row
+    if not isinstance(video_id, str) or not isinstance(started_at, datetime):
+        raise RuntimeError("stream metadata is invalid")
+    messages = collect_all(gateway, video_id, started_at, report_progress)
+    LOGGER.info(
+        "chat replay collected",
+        extra={"job_id": job.id, "message_count": len(messages)},
+    )
 
 
 def run(settings: Settings, stop_event: threading.Event) -> None:
     verify_database(settings.database_url)
+    gateway = ChatReplayGateway(
+        settings.chat_replay_base_url,
+        settings.chat_replay_timeout_seconds,
+    )
     store = JobStore(settings.database_url, settings.worker_id, settings.lease_seconds)
-    runner = JobRunner(store, pending_chat_handler, settings.heartbeat_interval_seconds)
+
+    def handle(job: ClaimedJob, report: ProgressReporter) -> None:
+        chat_handler(settings.database_url, gateway, job, report)
+
+    runner = JobRunner(store, handle, settings.heartbeat_interval_seconds)
     LOGGER.info("worker ready", extra={"worker_id": settings.worker_id})
     while not stop_event.is_set():
         processed = runner.run_once()

@@ -175,7 +175,8 @@ class JobRunner:
             self.store.succeed(job.id)
         except Exception as error:
             LOGGER.exception("job failed", extra={"job_id": job.id})
-            self.store.fail(job.id, type(error).__name__.upper(), str(error))
+            code = getattr(error, "code", type(error).__name__.upper())
+            self.store.fail(job.id, str(code), str(error))
         finally:
             stop_heartbeat.set()
             heartbeat.join(timeout=self.heartbeat_seconds + 1)
