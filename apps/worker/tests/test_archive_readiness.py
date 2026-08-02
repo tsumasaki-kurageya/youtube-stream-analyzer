@@ -19,6 +19,7 @@ from ysa_worker.archive_readiness import (
 class FixtureHandler(BaseHTTPRequestHandler):
     def do_GET(self) -> None:  # noqa: N802
         video_id = parse_qs(urlparse(self.path).query).get("videoId", [""])[0]
+        payload: dict[str, object]
         if self.path.startswith("/videos"):
             video_id = parse_qs(urlparse(self.path).query).get("id", [""])[0]
             if video_id == "failedvideo1":
