@@ -1,10 +1,9 @@
 from __future__ import annotations
 
 import json
-import socket
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode
@@ -69,9 +68,11 @@ class ChatReplayGateway:
             if error.code in {401, 403, 404, 410}:
                 raise ChatReplayUnavailable("chat replay is not available") from error
             if error.code == 429 or error.code >= 500:
-                raise ChatReplayTemporaryError("chat replay service is temporarily unavailable") from error
+                raise ChatReplayTemporaryError(
+                    "chat replay service is temporarily unavailable"
+                ) from error
             raise ChatReplayProtocolError("unexpected chat replay response") from error
-        except (TimeoutError, socket.timeout, URLError) as error:
+        except (TimeoutError, URLError) as error:
             raise ChatReplayTemporaryError("chat replay request failed") from error
         except (json.JSONDecodeError, UnicodeDecodeError) as error:
             raise ChatReplayProtocolError("invalid chat replay response") from error
@@ -194,8 +195,8 @@ def _normalize_renderer(
         raise ChatReplayProtocolError("chat message ID is missing")
     if not isinstance(timestamp_usec, str) or not timestamp_usec.isdigit():
         return None
-    published_at = datetime.fromtimestamp(int(timestamp_usec) / 1_000_000, timezone.utc)
-    started_at = stream_started_at.astimezone(timezone.utc)
+    published_at = datetime.fromtimestamp(int(timestamp_usec) / 1_000_000, UTC)
+    started_at = stream_started_at.astimezone(UTC)
     elapsed = max(0, int((published_at - started_at).total_seconds() * 1000))
     author = renderer.get("authorName")
     author_name = _runs_text(author) or "Unknown"
