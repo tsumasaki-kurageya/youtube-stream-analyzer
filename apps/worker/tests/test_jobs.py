@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 import threading
 from datetime import timedelta
+from typing import Any
 from uuid import uuid4
 
 import psycopg
@@ -14,11 +15,16 @@ DATABASE_URL = os.environ.get("YSA_TEST_DATABASE_URL")
 pytestmark = pytest.mark.skipif(not DATABASE_URL, reason="YSA_TEST_DATABASE_URL is not set")
 
 
+def required_row(row: tuple[Any, ...] | None) -> tuple[Any, ...]:
+    assert row is not None
+    return row
+
+
 def seed_job() -> str:
     assert DATABASE_URL
     video_id = uuid4().hex[:11]
     with psycopg.connect(DATABASE_URL) as connection:
-        stream_id = connection.execute(
+        stream_row = connection.execute(
             """
             INSERT INTO stream.streams(
                 youtube_video_id, source_url, title, channel_id, channel_title,
@@ -28,14 +34,16 @@ def seed_job() -> str:
             RETURNING id
             """,
             (video_id, f"https://youtu.be/{video_id}"),
-        ).fetchone()[0]
-        job_id = connection.execute(
+        ).fetchone()
+        stream_id = required_row(stream_row)[0]
+        job_row = connection.execute(
             """
             INSERT INTO collection.collection_jobs(stream_id,status)
             VALUES(%s,'queued') RETURNING id
             """,
             (stream_id,),
-        ).fetchone()[0]
+        ).fetchone()
+        job_id = required_row(job_row)[0]
         connection.execute(
             """
             INSERT INTO collection.collection_steps(job_id,name,status)
@@ -113,10 +121,11 @@ def test_runner_persists_failure_without_exposing_traceback() -> None:
     runner = JobRunner(JobStore(DATABASE_URL, "worker-failure", 30), fail, 0.05)
     assert runner.run_once() is True
     with psycopg.connect(DATABASE_URL) as connection:
-        status, code, message = connection.execute(
+        failure_row = connection.execute(
             "SELECT status,error_code,error_message FROM collection.collection_jobs WHERE id=%s",
             (job_id,),
         ).fetchone()
+    status, code, message = required_row(failure_row)
     assert status == "failed"
     assert code == "VALUEERROR"
     assert message == "fixture failure"
@@ -151,8 +160,9 @@ def test_expired_running_job_is_requeued_and_claimed() -> None:
     assert claimed is not None
     assert claimed.id == job_id
     with psycopg.connect(DATABASE_URL) as connection:
-        status, worker_id = connection.execute(
+        recovered_row = connection.execute(
             "SELECT status,worker_id FROM collection.collection_jobs WHERE id=%s",
             (job_id,),
         ).fetchone()
+    status, worker_id = required_row(recovered_row)
     assert (status, worker_id) == ("running", "replacement-worker")
