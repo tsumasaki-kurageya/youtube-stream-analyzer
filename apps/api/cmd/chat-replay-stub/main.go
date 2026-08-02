@@ -5,6 +5,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"strconv"
 	"sync"
 	"time"
 )
@@ -65,7 +66,7 @@ func message(id, author, text string, publishedAt time.Time) map[string]any {
 					"authorExternalChannelId": "author-" + id,
 					"authorName": map[string]any{"simpleText": author},
 					"message": map[string]any{"runs": []any{map[string]any{"text": text}}},
-					"timestampUsec": publishedAt.UnixMicroString(),
+					"timestampUsec": strconv.FormatInt(publishedAt.UnixMicro(), 10),
 				},
 			},
 		},
