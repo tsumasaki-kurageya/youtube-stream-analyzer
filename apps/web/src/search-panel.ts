@@ -161,8 +161,8 @@ function createPanel(id: string): HTMLElement {
     <div class="search-heading">
       <div>
         <p class="eyebrow">Search</p>
-        <h2 id="stream-search-title">チャット・字幕を検索</h2>
-        <p>文字列で横断検索し、結果から動画内時刻へ移動します。</p>
+        <h2 id="stream-search-title">配信内を検索</h2>
+        <p>チャットと字幕を文字列で横断検索し、結果から動画内時刻へ移動します。</p>
       </div>
     </div>
     <label for="stream-search-query">検索語</label>
