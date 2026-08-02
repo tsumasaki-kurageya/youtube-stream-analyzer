@@ -291,7 +291,11 @@ class JobRunner:
             )
             code = str(getattr(error, "code", type(error).__name__.upper()))
             retryable = bool(
-                getattr(error, "retryable", "TEMPORARY" in code or "TIMEOUT" in code)
+                getattr(
+                    error,
+                    "retryable",
+                    "TEMPORARY" in code or "TEMPORARILY" in code or "TIMEOUT" in code,
+                )
             )
             self.store.fail(step.id, code, str(error), retryable)
         finally:
