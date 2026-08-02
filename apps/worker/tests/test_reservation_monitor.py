@@ -124,7 +124,10 @@ def test_two_workers_do_not_claim_same_reservation() -> None:
         with lock:
             claimed.append(item.id)
 
-    threads = [threading.Thread(target=claim, args=(f"monitor-{index}",)) for index in range(2)]
+    threads = [
+        threading.Thread(target=claim, args=(f"monitor-{index}",))
+        for index in range(2)
+    ]
     for thread in threads:
         thread.start()
     for thread in threads:
@@ -171,7 +174,11 @@ def test_state_transition_and_temporary_failure_are_persisted() -> None:
 
     with psycopg.connect(DATABASE_URL) as connection:
         connection.execute(
-            "UPDATE reservation.reservations SET next_check_at=now()-interval '1 second' WHERE id=%s",
+            """
+            UPDATE reservation.reservations
+            SET next_check_at=now()-interval '1 second'
+            WHERE id=%s
+            """,
             (reservation_id,),
         )
     claimed_again = store.claim()
