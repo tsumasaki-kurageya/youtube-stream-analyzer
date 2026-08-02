@@ -11,7 +11,7 @@ class Settings:
     poll_interval_seconds: float
 
     @classmethod
-    def from_environment(cls) -> "Settings":
+    def from_environment(cls) -> Settings:
         database_url = os.environ.get("YSA_DATABASE_URL", "").strip()
         if not database_url:
             raise ValueError("YSA_DATABASE_URL is required")
