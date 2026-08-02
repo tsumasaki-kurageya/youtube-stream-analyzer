@@ -5,9 +5,9 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"time"
 
-	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -47,23 +47,18 @@ func (r *Repository) List(ctx context.Context, streamID string, limit int, curso
 		return Page{}, ErrStreamNotFound
 	}
 
-	var after *cursor
-	if cursorValue != "" {
-		decoded, err := decodeCursor(cursorValue)
-		if err != nil {
-			return Page{}, err
-		}
-		after = &decoded
-	}
-
 	query := `SELECT id,external_message_id,author_external_id,author_name,message_text,published_at,elapsed_milliseconds
 		FROM chat.chat_messages WHERE stream_id=$1`
 	args := []any{streamID}
-	if after != nil {
+	if cursorValue != "" {
+		after, err := decodeCursor(cursorValue)
+		if err != nil {
+			return Page{}, err
+		}
 		query += ` AND (elapsed_milliseconds,published_at,external_message_id) > ($2,$3,$4)`
 		args = append(args, after.Elapsed, after.Published, after.External)
 	}
-	query += ` ORDER BY elapsed_milliseconds,published_at,external_message_id LIMIT $` + argumentNumber(len(args)+1)
+	query += fmt.Sprintf(` ORDER BY elapsed_milliseconds,published_at,external_message_id LIMIT $%d`, len(args)+1)
 	args = append(args, limit+1)
 
 	rows, err := r.db.Query(ctx, query, args...)
@@ -97,13 +92,6 @@ func (r *Repository) List(ctx context.Context, streamID string, limit int, curso
 	return page, nil
 }
 
-func argumentNumber(value int) string {
-	if value < 10 {
-		return string(rune('0' + value))
-	}
-	return "10"
-}
-
 func encodeCursor(value cursor) (string, error) {
 	encoded, err := json.Marshal(value)
 	if err != nil {
@@ -126,5 +114,3 @@ func decodeCursor(value string) (cursor, error) {
 	}
 	return result, nil
 }
-
-var _ = pgx.ErrNoRows
