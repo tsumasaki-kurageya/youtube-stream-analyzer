@@ -67,8 +67,18 @@ class YouTubeReservationGateway:
 
     def observe(self, video_id: str, now: datetime | None = None) -> Observation:
         current = now or datetime.now(UTC)
-        endpoint = f"{self.base_url}/videos?{urlencode({'part': 'liveStreamingDetails', 'id': video_id, 'key': self.api_key})}"
-        request = Request(endpoint, headers={"Accept": "application/json", "User-Agent": "ysa-worker/0.1"})
+        query = urlencode(
+            {
+                "part": "liveStreamingDetails",
+                "id": video_id,
+                "key": self.api_key,
+            }
+        )
+        endpoint = f"{self.base_url}/videos?{query}"
+        request = Request(
+            endpoint,
+            headers={"Accept": "application/json", "User-Agent": "ysa-worker/0.1"},
+        )
         try:
             with urlopen(request, timeout=self.timeout_seconds) as response:
                 payload = json.load(response)
@@ -217,47 +227,46 @@ class ReservationStore:
             return result.rowcount == 1
 
     def apply(self, claimed: ClaimedReservation, observation: Observation) -> None:
-        with psycopg.connect(self.database_url) as connection:
-            with connection.transaction():
-                row = connection.execute(
+        with psycopg.connect(self.database_url) as connection, connection.transaction():
+            row = connection.execute(
+                """
+                UPDATE reservation.reservations
+                SET state=%s,scheduled_start_at=COALESCE(%s,scheduled_start_at),
+                    actual_start_at=COALESCE(%s,actual_start_at),
+                    actual_end_at=COALESCE(%s,actual_end_at),next_check_at=%s,
+                    last_checked_at=now(),last_error_code=NULL,last_error_message=NULL,
+                    last_error_retryable=NULL,worker_id=NULL,lease_expires_at=NULL,
+                    heartbeat_at=NULL,revision=revision+1,updated_at=now()
+                WHERE id=%s AND worker_id=%s AND revision=%s
+                RETURNING state
+                """,
+                (
+                    observation.state,
+                    observation.scheduled_start_at,
+                    observation.actual_start_at,
+                    observation.actual_end_at,
+                    observation.next_check_at,
+                    claimed.id,
+                    self.worker_id,
+                    claimed.revision,
+                ),
+            ).fetchone()
+            if row is None:
+                raise RuntimeError("reservation lease is no longer owned")
+            if claimed.state != observation.state:
+                connection.execute(
                     """
-                    UPDATE reservation.reservations
-                    SET state=%s,scheduled_start_at=COALESCE(%s,scheduled_start_at),
-                        actual_start_at=COALESCE(%s,actual_start_at),
-                        actual_end_at=COALESCE(%s,actual_end_at),next_check_at=%s,
-                        last_checked_at=now(),last_error_code=NULL,last_error_message=NULL,
-                        last_error_retryable=NULL,worker_id=NULL,lease_expires_at=NULL,
-                        heartbeat_at=NULL,revision=revision+1,updated_at=now()
-                    WHERE id=%s AND worker_id=%s AND revision=%s
-                    RETURNING state
+                    INSERT INTO reservation.reservation_transitions(
+                        reservation_id,from_state,to_state,reason_code
+                    ) VALUES(%s,%s,%s,%s)
                     """,
                     (
-                        observation.state,
-                        observation.scheduled_start_at,
-                        observation.actual_start_at,
-                        observation.actual_end_at,
-                        observation.next_check_at,
                         claimed.id,
-                        self.worker_id,
-                        claimed.revision,
+                        claimed.state,
+                        observation.state,
+                        observation.reason_code,
                     ),
-                ).fetchone()
-                if row is None:
-                    raise RuntimeError("reservation lease is no longer owned")
-                if claimed.state != observation.state:
-                    connection.execute(
-                        """
-                        INSERT INTO reservation.reservation_transitions(
-                            reservation_id,from_state,to_state,reason_code
-                        ) VALUES(%s,%s,%s,%s)
-                        """,
-                        (
-                            claimed.id,
-                            claimed.state,
-                            observation.state,
-                            observation.reason_code,
-                        ),
-                    )
+                )
 
     def fail(self, claimed: ClaimedReservation, error: Exception) -> None:
         retryable = bool(getattr(error, "retryable", False))
@@ -271,40 +280,40 @@ class ReservationStore:
             state = "failed"
             failed_at = datetime.now(UTC)
             next_check = datetime.now(UTC)
-        with psycopg.connect(self.database_url) as connection:
-            with connection.transaction():
-                result = connection.execute(
+        with psycopg.connect(self.database_url) as connection, connection.transaction():
+            result = connection.execute(
+                """
+                UPDATE reservation.reservations
+                SET state=%s,next_check_at=%s,last_checked_at=now(),
+                    last_error_code=%s,last_error_message=%s,last_error_retryable=%s,
+                    failed_at=%s,worker_id=NULL,lease_expires_at=NULL,heartbeat_at=NULL,
+                    revision=revision+1,updated_at=now()
+                WHERE id=%s AND worker_id=%s AND revision=%s
+                """,
+                (
+                    state,
+                    next_check,
+                    code,
+                    str(error)[:1000],
+                    retryable,
+                    failed_at,
+                    claimed.id,
+                    self.worker_id,
+                    claimed.revision,
+                ),
+            )
+            if result.rowcount != 1:
+                raise RuntimeError("reservation lease is no longer owned")
+            if not retryable:
+                connection.execute(
                     """
-                    UPDATE reservation.reservations
-                    SET state=%s,next_check_at=%s,last_checked_at=now(),
-                        last_error_code=%s,last_error_message=%s,last_error_retryable=%s,
-                        failed_at=%s,worker_id=NULL,lease_expires_at=NULL,heartbeat_at=NULL,
-                        revision=revision+1,updated_at=now()
-                    WHERE id=%s AND worker_id=%s AND revision=%s
+                    INSERT INTO reservation.reservation_transitions(
+                        reservation_id,from_state,to_state,reason_code,
+                        error_code,error_message
+                    ) VALUES(%s,%s,'failed','monitoring_failed',%s,%s)
                     """,
-                    (
-                        state,
-                        next_check,
-                        code,
-                        str(error)[:1000],
-                        retryable,
-                        failed_at,
-                        claimed.id,
-                        self.worker_id,
-                        claimed.revision,
-                    ),
+                    (claimed.id, claimed.state, code, str(error)[:1000]),
                 )
-                if result.rowcount != 1:
-                    raise RuntimeError("reservation lease is no longer owned")
-                if not retryable:
-                    connection.execute(
-                        """
-                        INSERT INTO reservation.reservation_transitions(
-                            reservation_id,from_state,to_state,reason_code,error_code,error_message
-                        ) VALUES(%s,%s,'failed','monitoring_failed',%s,%s)
-                        """,
-                        (claimed.id, claimed.state, code, str(error)[:1000]),
-                    )
 
 
 class ReservationMonitorRunner:
