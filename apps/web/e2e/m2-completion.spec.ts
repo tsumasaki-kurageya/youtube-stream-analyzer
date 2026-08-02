@@ -2,6 +2,7 @@ import {
   expect,
   test,
   type APIRequestContext,
+  type Locator,
   type Page,
   type TestInfo,
 } from '@playwright/test';
@@ -33,10 +34,12 @@ async function waitForMessages(request: APIRequestContext, streamId: string) {
   }, { timeout: 20_000 }).toBe(3);
 }
 
-async function openChat(page: Page, streamId: string) {
+async function openChat(page: Page, streamId: string): Promise<Locator> {
   await page.getByRole('button', { name: '収集したチャットを見る' }).click();
   await expect(page).toHaveURL(`/streams/${streamId}/chat`);
-  await expect(page.getByRole('list', { name: 'チャット時系列' })).toBeVisible({ timeout: 10_000 });
+  const timeline = page.getByRole('list', { name: 'チャット時系列' });
+  await expect(timeline).toBeVisible({ timeout: 10_000 });
+  return timeline;
 }
 
 test('M2の収集開始から時系列閲覧と冪等な再収集まで完了する', async ({ page, request }, testInfo) => {
@@ -50,11 +53,11 @@ test('M2の収集開始から時系列閲覧と冪等な再収集まで完了す
   await expect(page.getByText('3件')).toBeVisible();
   await waitForMessages(request, streamId);
 
-  await openChat(page, streamId);
-  await expect(page.locator('.chat-message')).toHaveCount(3);
-  await expect(page.locator('.chat-time')).toHaveText(['00:00:01', '00:00:02', '00:00:03']);
-  await expect(page.getByText('first message')).toBeVisible();
-  await expect(page.getByText('third message')).toBeVisible();
+  const timeline = await openChat(page, streamId);
+  await expect(timeline.getByRole('listitem')).toHaveCount(3);
+  await expect(timeline.locator('time')).toHaveText(['00:00:01', '00:00:02', '00:00:03']);
+  await expect(timeline.getByText('first message')).toBeVisible();
+  await expect(timeline.getByText('third message')).toBeVisible();
 
   const second = await request.post(`/api/streams/${streamId}/chat-collections`);
   expect(second.status()).toBe(202);
@@ -74,6 +77,6 @@ test('失敗理由を表示し再実行で完了する', async ({ page, request 
   await page.getByRole('button', { name: 'チャット収集を再実行' }).click();
   await waitForCollection(page, '収集完了');
   await waitForMessages(request, streamId);
-  await openChat(page, streamId);
-  await expect(page.locator('.chat-message')).toHaveCount(3);
+  const timeline = await openChat(page, streamId);
+  await expect(timeline.getByRole('listitem')).toHaveCount(3);
 });
