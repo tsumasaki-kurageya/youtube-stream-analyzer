@@ -13,12 +13,14 @@ LOGGER = logging.getLogger("ysa.worker")
 
 
 def verify_database(database_url: str) -> None:
-    with psycopg.connect(database_url, connect_timeout=5) as connection:
-        with connection.cursor() as cursor:
-            cursor.execute("SELECT 1")
-            row = cursor.fetchone()
-            if row != (1,):
-                raise RuntimeError("database self-check returned an unexpected result")
+    with (
+        psycopg.connect(database_url, connect_timeout=5) as connection,
+        connection.cursor() as cursor,
+    ):
+        cursor.execute("SELECT 1")
+        row = cursor.fetchone()
+        if row != (1,):
+            raise RuntimeError("database self-check returned an unexpected result")
 
 
 def run(settings: Settings, stop_event: threading.Event) -> None:
