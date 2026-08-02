@@ -12,6 +12,7 @@ export default defineConfig({
     baseURL: 'http://127.0.0.1:5173',
     trace: 'retain-on-failure',
     screenshot: 'only-on-failure',
+    video: 'retain-on-failure',
   },
   projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }],
   webServer: [
@@ -28,6 +29,13 @@ export default defineConfig({
       port: 18081,
       reuseExistingServer: !process.env.CI,
       env: { YSA_CHAT_REPLAY_STUB_ADDRESS: ':18081' },
+    },
+    {
+      command: 'go run ./cmd/transcript-stub',
+      cwd: '../api',
+      port: 18083,
+      reuseExistingServer: !process.env.CI,
+      env: { YSA_TRANSCRIPT_STUB_ADDRESS: ':18083' },
     },
     {
       command: 'go run ./cmd/api',
@@ -54,6 +62,8 @@ export default defineConfig({
         YSA_WORKER_LEASE_SECONDS: '10',
         YSA_CHAT_REPLAY_BASE_URL: 'http://127.0.0.1:18081/replay',
         YSA_CHAT_REPLAY_TIMEOUT_SECONDS: '2',
+        YSA_TRANSCRIPT_BASE_URL: 'http://127.0.0.1:18083',
+        YSA_TRANSCRIPT_TIMEOUT_SECONDS: '2',
       },
     },
     {
