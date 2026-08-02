@@ -56,7 +56,7 @@ jobs:
         run: npx playwright install --with-deps chromium
       - name: Apply migrations
         run: make db-migrate
-      - name: Run M1 browser journey
+      - name: Run browser journeys
         working-directory: apps/web
         run: npm run test:e2e
       - name: Validate repository and application foundations
@@ -65,11 +65,20 @@ jobs:
         run: |
           make db-rollback
           make db-migrate
+      - name: Check generated artifacts for common secrets
+        if: always()
+        run: |
+          if grep -RIE '(AIza[0-9A-Za-z_-]{30,}|-----BEGIN (RSA |EC |OPENSSH )?PRIVATE KEY-----|github_pat_[0-9A-Za-z_]+)' apps/web/playwright-report apps/web/test-results 2>/dev/null; then
+            echo 'Potential secret found in test artifacts'
+            exit 1
+          fi
       - name: Upload Playwright report
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: playwright-report
-          path: apps/web/playwright-report/
+          path: |
+            apps/web/playwright-report/
+            apps/web/test-results/
           if-no-files-found: ignore
           retention-days: 7
