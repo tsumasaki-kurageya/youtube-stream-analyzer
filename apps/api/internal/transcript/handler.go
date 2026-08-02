@@ -21,7 +21,18 @@ func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 		}
 		limit = value
 	}
-	page, err := h.repository.List(r.Context(), r.PathValue("streamId"), limit, r.URL.Query().Get("cursor"))
+	fromMS, toMS, ok := parseRange(w, r)
+	if !ok {
+		return
+	}
+	page, err := h.repository.List(
+		r.Context(),
+		r.PathValue("streamId"),
+		limit,
+		r.URL.Query().Get("cursor"),
+		fromMS,
+		toMS,
+	)
 	if err != nil {
 		handleError(w, err, r.URL.Query().Get("cursor") != "")
 		return
@@ -29,23 +40,29 @@ func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, page)
 }
 
-func (h *Handler) Range(w http.ResponseWriter, r *http.Request) {
-	fromMS, err := strconv.ParseInt(r.URL.Query().Get("fromMs"), 10, 64)
-	if err != nil || fromMS < 0 {
-		writeProblem(w, http.StatusBadRequest, "INVALID_TIME_RANGE", "fromMsは0以上で指定してください")
-		return
+func parseRange(w http.ResponseWriter, r *http.Request) (*int64, *int64, bool) {
+	var fromMS, toMS *int64
+	if raw := r.URL.Query().Get("fromMs"); raw != "" {
+		value, err := strconv.ParseInt(raw, 10, 64)
+		if err != nil || value < 0 {
+			writeProblem(w, http.StatusUnprocessableEntity, "INVALID_TIME_RANGE", "fromMsは0以上で指定してください")
+			return nil, nil, false
+		}
+		fromMS = &value
 	}
-	toMS, err := strconv.ParseInt(r.URL.Query().Get("toMs"), 10, 64)
-	if err != nil || toMS <= fromMS || toMS-fromMS > 300000 {
-		writeProblem(w, http.StatusBadRequest, "INVALID_TIME_RANGE", "toMsはfromMsより大きく、範囲は5分以内で指定してください")
-		return
+	if raw := r.URL.Query().Get("toMs"); raw != "" {
+		value, err := strconv.ParseInt(raw, 10, 64)
+		if err != nil || value < 1 {
+			writeProblem(w, http.StatusUnprocessableEntity, "INVALID_TIME_RANGE", "toMsは1以上で指定してください")
+			return nil, nil, false
+		}
+		toMS = &value
 	}
-	items, err := h.repository.Range(r.Context(), r.PathValue("streamId"), fromMS, toMS)
-	if err != nil {
-		handleError(w, err, false)
-		return
+	if fromMS != nil && toMS != nil && *toMS <= *fromMS {
+		writeProblem(w, http.StatusUnprocessableEntity, "INVALID_TIME_RANGE", "toMsはfromMsより大きく指定してください")
+		return nil, nil, false
 	}
-	writeJSON(w, map[string]any{"items": items, "fromMs": fromMS, "toMs": toMS})
+	return fromMS, toMS, true
 }
 
 func handleError(w http.ResponseWriter, err error, invalidCursor bool) {
