@@ -34,17 +34,34 @@ def persisted_context(database_url: str) -> Iterator[tuple[str, str]]:
             """,
             (video_id, f"https://youtu.be/{video_id}"),
         )
-        stream_id = str(cursor.fetchone()[0])
+        stream_row = cursor.fetchone()
+        if stream_row is None:
+            raise RuntimeError("stream insert returned no row")
+        stream_id = str(stream_row[0])
         cursor.execute(
-            "INSERT INTO collection.collection_jobs(stream_id,status) VALUES(%s,'succeeded') RETURNING id",
+            """
+            INSERT INTO collection.collection_jobs(stream_id,status)
+            VALUES(%s,'succeeded')
+            RETURNING id
+            """,
             (stream_id,),
         )
-        job_id = str(cursor.fetchone()[0])
+        job_row = cursor.fetchone()
+        if job_row is None:
+            raise RuntimeError("collection job insert returned no row")
+        job_id = str(job_row[0])
         cursor.execute(
-            "INSERT INTO collection.collection_steps(job_id,name,status) VALUES(%s,'transcript','succeeded') RETURNING id",
+            """
+            INSERT INTO collection.collection_steps(job_id,name,status)
+            VALUES(%s,'transcript','succeeded')
+            RETURNING id
+            """,
             (job_id,),
         )
-        step_id = str(cursor.fetchone()[0])
+        step_row = cursor.fetchone()
+        if step_row is None:
+            raise RuntimeError("collection step insert returned no row")
+        step_id = str(step_row[0])
     try:
         yield stream_id, step_id
     finally:
@@ -89,10 +106,16 @@ def test_replace_complete_result_is_idempotent_and_removes_stale_segments(
         )
         assert cursor.fetchall() == [("a", 1100, "updated"), ("c", 3000, "third")]
         cursor.execute(
-            "SELECT count(*) FROM transcript.transcript_tracks WHERE stream_id=%s AND is_selected",
+            """
+            SELECT count(*)
+            FROM transcript.transcript_tracks
+            WHERE stream_id=%s AND is_selected
+            """,
             (stream_id,),
         )
-        assert cursor.fetchone()[0] == 1
+        selected_row = cursor.fetchone()
+        assert selected_row is not None
+        assert selected_row[0] == 1
 
 
 def test_no_transcript_does_not_modify_existing_data(
@@ -116,4 +139,6 @@ def test_no_transcript_does_not_modify_existing_data(
             "SELECT count(*) FROM transcript.transcript_segments WHERE stream_id=%s",
             (stream_id,),
         )
-        assert cursor.fetchone()[0] == 1
+        count_row = cursor.fetchone()
+        assert count_row is not None
+        assert count_row[0] == 1
