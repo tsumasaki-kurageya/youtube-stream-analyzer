@@ -15,6 +15,9 @@ class Settings:
     chat_replay_timeout_seconds: float
     transcript_base_url: str
     transcript_timeout_seconds: float
+    youtube_api_key: str
+    youtube_api_base_url: str
+    youtube_timeout_seconds: float
 
     @classmethod
     def from_environment(cls) -> Settings:
@@ -43,6 +46,12 @@ class Settings:
         transcript_base_url = os.environ.get("YSA_TRANSCRIPT_BASE_URL", "").strip()
         transcript_timeout = _positive_float("YSA_TRANSCRIPT_TIMEOUT_SECONDS", "15")
 
+        youtube_api_key = os.environ.get("YSA_YOUTUBE_API_KEY", "").strip()
+        youtube_api_base_url = os.environ.get(
+            "YSA_YOUTUBE_API_BASE_URL", "https://www.googleapis.com/youtube/v3"
+        ).strip()
+        youtube_timeout = _positive_float("YSA_YOUTUBE_TIMEOUT_SECONDS", "10")
+
         return cls(
             database_url=database_url,
             worker_id=worker_id,
@@ -53,6 +62,9 @@ class Settings:
             chat_replay_timeout_seconds=chat_replay_timeout,
             transcript_base_url=transcript_base_url,
             transcript_timeout_seconds=transcript_timeout,
+            youtube_api_key=youtube_api_key,
+            youtube_api_base_url=youtube_api_base_url,
+            youtube_timeout_seconds=youtube_timeout,
         )
 
 
