@@ -5,6 +5,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"strings"
 	"sync"
 )
 
@@ -19,11 +20,11 @@ func main() {
 	mux.HandleFunc("GET /tracks", func(w http.ResponseWriter, r *http.Request) {
 		videoID := r.URL.Query().Get("videoId")
 		w.Header().Set("Content-Type", "application/json")
-		if videoID == "m3nodata001" {
+		if strings.HasPrefix(videoID, "m3none") {
 			_, _ = fmt.Fprint(w, `{"tracks":[]}`)
 			return
 		}
-		if videoID == "m3failonce1" {
+		if strings.HasPrefix(videoID, "m3fail") {
 			mu.Lock()
 			alreadyFailed := failedOnce[videoID]
 			if !alreadyFailed {
