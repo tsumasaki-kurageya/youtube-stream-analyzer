@@ -79,20 +79,22 @@ func TestSearchReturnsChatAndTranscriptWithStableCursor(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(first.Items) != 2 || first.NextCursor == nil {
+	if len(first.Items) != 2 || first.NextCursor == nil || !first.HasMore {
 		t.Fatalf("unexpected first page: %#v", first)
 	}
-	if first.Items[0].Type != "chat" || first.Items[0].ElapsedMilliseconds != 1000 {
+	if first.Items[0].Type != "chat" || first.Items[0].OffsetMilliseconds != 1000 ||
+		first.Items[0].Speaker == nil || *first.Items[0].Speaker != "alice" {
 		t.Fatalf("unexpected first item: %#v", first.Items[0])
 	}
-	if first.Items[1].Type != "transcript" || first.Items[1].ElapsedMilliseconds != 2000 {
+	if first.Items[1].Type != "transcript" || first.Items[1].OffsetMilliseconds != 2000 ||
+		first.Items[1].EndOffsetMilliseconds == nil || *first.Items[1].EndOffsetMilliseconds != 2500 {
 		t.Fatalf("unexpected second item: %#v", first.Items[1])
 	}
 	second, err := repository.Search(ctx, streamID, "検索対象", 2, *first.NextCursor)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(second.Items) != 1 || second.Items[0].ElapsedMilliseconds != 3000 {
+	if len(second.Items) != 1 || second.Items[0].OffsetMilliseconds != 3000 || second.HasMore {
 		t.Fatalf("unexpected second page: %#v", second)
 	}
 }
