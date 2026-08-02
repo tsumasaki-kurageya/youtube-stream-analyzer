@@ -10,7 +10,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-func TestListUsesStableCursorPaging(t *testing.T) {
+func TestListUsesStableCursorPagingAndTimeRange(t *testing.T) {
 	url := os.Getenv("YSA_TEST_DATABASE_URL")
 	if url == "" {
 		t.Skip("YSA_TEST_DATABASE_URL is not set")
@@ -38,7 +38,7 @@ func TestListUsesStableCursorPaging(t *testing.T) {
 		id      string
 		elapsed int64
 	}{
-		{"b", 1000}, {"a", 1000}, {"c", 2000},
+		{"b", 1000}, {"a", 1000}, {"c", 2000}, {"d", 5000},
 	} {
 		_, err := db.Exec(ctx, `INSERT INTO chat.chat_messages(stream_id,collection_job_id,external_message_id,author_name,message_text,published_at,elapsed_milliseconds) VALUES($1,$2,$3,'user',$3,$4,$5)`, streamID, jobID, item.id, published, item.elapsed)
 		if err != nil {
@@ -47,18 +47,27 @@ func TestListUsesStableCursorPaging(t *testing.T) {
 	}
 
 	repository := NewRepository(db)
-	first, err := repository.List(ctx, streamID, 2, "")
+	first, err := repository.List(ctx, streamID, 2, "", nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if len(first.Items) != 2 || first.Items[0].ExternalMessageID != "a" || first.Items[1].ExternalMessageID != "b" || first.NextCursor == nil {
 		t.Fatalf("unexpected first page: %#v", first)
 	}
-	second, err := repository.List(ctx, streamID, 2, *first.NextCursor)
+	second, err := repository.List(ctx, streamID, 2, *first.NextCursor, nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(second.Items) != 1 || second.Items[0].ExternalMessageID != "c" || second.NextCursor != nil {
+	if len(second.Items) != 2 || second.Items[0].ExternalMessageID != "c" || second.Items[1].ExternalMessageID != "d" || second.NextCursor != nil {
 		t.Fatalf("unexpected second page: %#v", second)
+	}
+
+	from, to := int64(1500), int64(3000)
+	ranged, err := repository.List(ctx, streamID, 10, "", &from, &to)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(ranged.Items) != 1 || ranged.Items[0].ExternalMessageID != "c" {
+		t.Fatalf("unexpected ranged page: %#v", ranged)
 	}
 }
