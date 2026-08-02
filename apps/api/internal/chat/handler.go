@@ -21,8 +21,12 @@ func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 		}
 		limit = value
 	}
+	fromMS, toMS, ok := parseRange(w, r)
+	if !ok {
+		return
+	}
 
-	page, err := h.repository.List(r.Context(), r.PathValue("streamId"), limit, r.URL.Query().Get("cursor"))
+	page, err := h.repository.List(r.Context(), r.PathValue("streamId"), limit, r.URL.Query().Get("cursor"), fromMS, toMS)
 	if err != nil {
 		switch {
 		case errors.Is(err, ErrStreamNotFound):
@@ -38,6 +42,31 @@ func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(page)
+}
+
+func parseRange(w http.ResponseWriter, r *http.Request) (*int64, *int64, bool) {
+	var fromMS, toMS *int64
+	if raw := r.URL.Query().Get("fromMs"); raw != "" {
+		value, err := strconv.ParseInt(raw, 10, 64)
+		if err != nil || value < 0 {
+			writeProblem(w, http.StatusUnprocessableEntity, "INVALID_TIME_RANGE", "fromMsは0以上で指定してください")
+			return nil, nil, false
+		}
+		fromMS = &value
+	}
+	if raw := r.URL.Query().Get("toMs"); raw != "" {
+		value, err := strconv.ParseInt(raw, 10, 64)
+		if err != nil || value < 1 {
+			writeProblem(w, http.StatusUnprocessableEntity, "INVALID_TIME_RANGE", "toMsは1以上で指定してください")
+			return nil, nil, false
+		}
+		toMS = &value
+	}
+	if fromMS != nil && toMS != nil && *toMS <= *fromMS {
+		writeProblem(w, http.StatusUnprocessableEntity, "INVALID_TIME_RANGE", "toMsはfromMsより大きく指定してください")
+		return nil, nil, false
+	}
+	return fromMS, toMS, true
 }
 
 func writeProblem(w http.ResponseWriter, status int, code, title string) {
