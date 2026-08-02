@@ -74,13 +74,21 @@ DROP INDEX IF EXISTS collection.collection_steps_claim_idx;
 DROP TABLE IF EXISTS collection.collection_step_attempts;
 
 ALTER TABLE collection.collection_steps
-    DROP CONSTRAINT collection_steps_status_check,
+    DROP CONSTRAINT collection_steps_status_check;
+
+UPDATE collection.collection_steps
+SET status = CASE
+    WHEN status = 'no_data' THEN 'succeeded'
+    WHEN status = 'cancelled' THEN 'failed'
+    ELSE status
+END;
+
+ALTER TABLE collection.collection_steps
     DROP COLUMN retryable,
     DROP COLUMN heartbeat_at,
     DROP COLUMN lease_expires_at,
     DROP COLUMN worker_id,
-    DROP COLUMN attempt;
-ALTER TABLE collection.collection_steps
+    DROP COLUMN attempt,
     ADD CONSTRAINT collection_steps_status_check CHECK (
         status IN ('queued','running','succeeded','failed')
     );
@@ -89,10 +97,19 @@ DROP INDEX collection.collection_jobs_active_stream_uidx;
 
 ALTER TABLE collection.collection_jobs
     DROP CONSTRAINT collection_jobs_status_check,
-    DROP CONSTRAINT collection_jobs_kind_check,
-    DROP COLUMN requested_steps,
-    ALTER COLUMN kind SET DEFAULT 'chat';
+    DROP CONSTRAINT collection_jobs_kind_check;
+
+UPDATE collection.collection_jobs
+SET kind = 'chat',
+    status = CASE
+        WHEN status = 'partial' THEN 'failed'
+        WHEN status = 'cancelled' THEN 'failed'
+        ELSE status
+    END;
+
 ALTER TABLE collection.collection_jobs
+    DROP COLUMN requested_steps,
+    ALTER COLUMN kind SET DEFAULT 'chat',
     ADD CONSTRAINT collection_jobs_kind_check CHECK (kind='chat'),
     ADD CONSTRAINT collection_jobs_status_check CHECK (
         status IN ('queued','running','succeeded','failed')
