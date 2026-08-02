@@ -66,7 +66,6 @@ func main() {
 	mux.HandleFunc("GET /api/streams/{streamId}/chat-collections/latest", collectionHandler.Latest)
 	mux.HandleFunc("GET /api/streams/{streamId}/chat-messages", chatHandler.List)
 	mux.HandleFunc("GET /api/streams/{streamId}/transcript-segments", transcriptHandler.List)
-	mux.HandleFunc("GET /api/streams/{streamId}/transcript-segments/range", transcriptHandler.Range)
 	mux.HandleFunc("POST /api/collection-jobs/{jobId}/retry", collectionHandler.Retry)
 
 	server := &http.Server{Addr: addr, Handler: mux, ReadHeaderTimeout: 5 * time.Second}
