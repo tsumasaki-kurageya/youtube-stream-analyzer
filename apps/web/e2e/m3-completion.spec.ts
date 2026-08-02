@@ -74,11 +74,11 @@ test('複数工程収集から同期閲覧・検索・再収集の重複防止�
   const stream = await register(request, videoID('m3norm', testInfo));
   await startFull(request, stream.id);
   const firstJob = await waitForJob(request, stream.id, 'succeeded');
-  expect(firstJob.steps.map((step) => [step.name, step.status])).toEqual([
-    ['metadata', 'succeeded'],
-    ['chat_replay', 'succeeded'],
-    ['transcript', 'succeeded'],
-  ]);
+  expect(Object.fromEntries(firstJob.steps.map((step) => [step.name, step.status]))).toEqual({
+    metadata: 'succeeded',
+    chat_replay: 'succeeded',
+    transcript: 'succeeded',
+  });
 
   const initialChatCount = await count(request, `/api/streams/${stream.id}/chat-messages?limit=200`);
   const initialTranscriptCount = await count(request, `/api/streams/${stream.id}/transcript-segments?limit=200`);
