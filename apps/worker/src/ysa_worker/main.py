@@ -59,10 +59,11 @@ def run(settings: Settings, stop_event: threading.Event) -> None:
         settings.chat_replay_timeout_seconds,
     )
     store = JobStore(settings.database_url, settings.worker_id, settings.lease_seconds)
-    handler = lambda job, report: chat_handler(
-        settings.database_url, gateway, job, report
-    )
-    runner = JobRunner(store, handler, settings.heartbeat_interval_seconds)
+
+    def handle(job: ClaimedJob, report: ProgressReporter) -> None:
+        chat_handler(settings.database_url, gateway, job, report)
+
+    runner = JobRunner(store, handle, settings.heartbeat_interval_seconds)
     LOGGER.info("worker ready", extra={"worker_id": settings.worker_id})
     while not stop_event.is_set():
         processed = runner.run_once()
