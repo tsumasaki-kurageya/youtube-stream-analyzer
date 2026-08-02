@@ -1,4 +1,6 @@
 -- +goose Up
+DROP INDEX collection.collection_jobs_active_stream_kind_uidx;
+
 ALTER TABLE collection.collection_jobs
     DROP CONSTRAINT collection_jobs_kind_check,
     DROP CONSTRAINT collection_jobs_status_check;
@@ -7,13 +9,15 @@ ALTER TABLE collection.collection_jobs
     ALTER COLUMN kind SET DEFAULT 'full',
     ADD COLUMN requested_steps text[] NOT NULL DEFAULT ARRAY['chat_replay']::text[];
 
-UPDATE collection.collection_jobs SET kind='chat' WHERE kind='chat';
-
 ALTER TABLE collection.collection_jobs
     ADD CONSTRAINT collection_jobs_kind_check CHECK (kind IN ('chat','full')),
     ADD CONSTRAINT collection_jobs_status_check CHECK (
         status IN ('queued','running','succeeded','partial','failed','cancelled')
     );
+
+CREATE UNIQUE INDEX collection_jobs_active_stream_uidx
+    ON collection.collection_jobs(stream_id)
+    WHERE status IN ('queued','running');
 
 ALTER TABLE collection.collection_steps
     DROP CONSTRAINT collection_steps_status_check;
@@ -81,6 +85,8 @@ ALTER TABLE collection.collection_steps
         status IN ('queued','running','succeeded','failed')
     );
 
+DROP INDEX collection.collection_jobs_active_stream_uidx;
+
 ALTER TABLE collection.collection_jobs
     DROP CONSTRAINT collection_jobs_status_check,
     DROP CONSTRAINT collection_jobs_kind_check,
@@ -91,3 +97,7 @@ ALTER TABLE collection.collection_jobs
     ADD CONSTRAINT collection_jobs_status_check CHECK (
         status IN ('queued','running','succeeded','failed')
     );
+
+CREATE UNIQUE INDEX collection_jobs_active_stream_kind_uidx
+    ON collection.collection_jobs(stream_id, kind)
+    WHERE status IN ('queued','running');
