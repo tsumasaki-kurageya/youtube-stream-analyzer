@@ -14,6 +14,7 @@ import (
 	collectionapi "github.com/tsumasaki-kurageya/youtube-stream-analyzer/apps/api/internal/collection"
 	"github.com/tsumasaki-kurageya/youtube-stream-analyzer/apps/api/internal/platform"
 	streamapi "github.com/tsumasaki-kurageya/youtube-stream-analyzer/apps/api/internal/stream"
+	transcriptapi "github.com/tsumasaki-kurageya/youtube-stream-analyzer/apps/api/internal/transcript"
 	"github.com/tsumasaki-kurageya/youtube-stream-analyzer/apps/api/internal/youtube"
 )
 
@@ -44,6 +45,7 @@ func main() {
 	readHandler := streamapi.NewReadHandler(streamRepository)
 	collectionHandler := collectionapi.NewHandler(collectionapi.NewRepository(db))
 	chatHandler := chatapi.NewHandler(chatapi.NewRepository(db))
+	transcriptHandler := transcriptapi.NewHandler(transcriptapi.NewRepository(db))
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /api/health", writeOK)
@@ -63,6 +65,7 @@ func main() {
 	mux.HandleFunc("POST /api/streams/{streamId}/chat-collections", collectionHandler.Start)
 	mux.HandleFunc("GET /api/streams/{streamId}/chat-collections/latest", collectionHandler.Latest)
 	mux.HandleFunc("GET /api/streams/{streamId}/chat-messages", chatHandler.List)
+	mux.HandleFunc("GET /api/streams/{streamId}/transcript-segments", transcriptHandler.List)
 	mux.HandleFunc("POST /api/collection-jobs/{jobId}/retry", collectionHandler.Retry)
 
 	server := &http.Server{Addr: addr, Handler: mux, ReadHeaderTimeout: 5 * time.Second}
