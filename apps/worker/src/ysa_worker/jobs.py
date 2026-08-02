@@ -47,38 +47,40 @@ class JobStore:
             return result.rowcount or 0
 
     def claim(self) -> ClaimedJob | None:
-        with psycopg.connect(self.database_url, row_factory=dict_row) as connection:
-            with connection.transaction():
-                row = connection.execute(
-                    """
-                    WITH candidate AS (
-                        SELECT id FROM collection.collection_jobs
-                        WHERE status='queued'
-                        ORDER BY created_at, id
-                        FOR UPDATE SKIP LOCKED
-                        LIMIT 1
-                    )
-                    UPDATE collection.collection_jobs j
-                    SET status='running', worker_id=%s, started_at=COALESCE(started_at, now()),
-                        heartbeat_at=now(), lease_expires_at=now() + %s::interval,
-                        updated_at=now()
-                    FROM candidate
-                    WHERE j.id=candidate.id
-                    RETURNING j.id::text, j.stream_id::text, j.attempt
-                    """,
-                    (self.worker_id, timedelta(seconds=self.lease_seconds)),
-                ).fetchone()
-                if row is None:
-                    return None
-                connection.execute(
-                    """
-                    UPDATE collection.collection_steps
-                    SET status='running', started_at=COALESCE(started_at, now()), updated_at=now()
-                    WHERE job_id=%s AND name='chat_replay' AND status='queued'
-                    """,
-                    (row["id"],),
+        with (
+            psycopg.connect(self.database_url, row_factory=dict_row) as connection,
+            connection.transaction(),
+        ):
+            row = connection.execute(
+                """
+                WITH candidate AS (
+                    SELECT id FROM collection.collection_jobs
+                    WHERE status='queued'
+                    ORDER BY created_at, id
+                    FOR UPDATE SKIP LOCKED
+                    LIMIT 1
                 )
-                return ClaimedJob(**row)
+                UPDATE collection.collection_jobs j
+                SET status='running', worker_id=%s, started_at=COALESCE(started_at, now()),
+                    heartbeat_at=now(), lease_expires_at=now() + %s::interval,
+                    updated_at=now()
+                FROM candidate
+                WHERE j.id=candidate.id
+                RETURNING j.id::text, j.stream_id::text, j.attempt
+                """,
+                (self.worker_id, timedelta(seconds=self.lease_seconds)),
+            ).fetchone()
+            if row is None:
+                return None
+            connection.execute(
+                """
+                UPDATE collection.collection_steps
+                SET status='running', started_at=COALESCE(started_at, now()), updated_at=now()
+                WHERE job_id=%s AND name='chat_replay' AND status='queued'
+                """,
+                (row["id"],),
+            )
+            return ClaimedJob(**row)
 
     def heartbeat(self, job_id: str) -> bool:
         with psycopg.connect(self.database_url) as connection:
