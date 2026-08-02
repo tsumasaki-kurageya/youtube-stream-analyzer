@@ -10,6 +10,7 @@ import (
 	"syscall"
 	"time"
 
+	chatapi "github.com/tsumasaki-kurageya/youtube-stream-analyzer/apps/api/internal/chat"
 	collectionapi "github.com/tsumasaki-kurageya/youtube-stream-analyzer/apps/api/internal/collection"
 	"github.com/tsumasaki-kurageya/youtube-stream-analyzer/apps/api/internal/platform"
 	streamapi "github.com/tsumasaki-kurageya/youtube-stream-analyzer/apps/api/internal/stream"
@@ -42,6 +43,7 @@ func main() {
 	streamRepository := streamapi.NewRepository(db)
 	readHandler := streamapi.NewReadHandler(streamRepository)
 	collectionHandler := collectionapi.NewHandler(collectionapi.NewRepository(db))
+	chatHandler := chatapi.NewHandler(chatapi.NewRepository(db))
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /api/health", writeOK)
@@ -60,6 +62,7 @@ func main() {
 	mux.HandleFunc("GET /api/streams/{streamId}", readHandler.Detail)
 	mux.HandleFunc("POST /api/streams/{streamId}/chat-collections", collectionHandler.Start)
 	mux.HandleFunc("GET /api/streams/{streamId}/chat-collections/latest", collectionHandler.Latest)
+	mux.HandleFunc("GET /api/streams/{streamId}/chat-messages", chatHandler.List)
 	mux.HandleFunc("POST /api/collection-jobs/{jobId}/retry", collectionHandler.Retry)
 
 	server := &http.Server{Addr: addr, Handler: mux, ReadHeaderTimeout: 5 * time.Second}
