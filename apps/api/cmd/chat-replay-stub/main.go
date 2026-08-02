@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 )
@@ -29,7 +30,7 @@ func main() {
 func replay(w http.ResponseWriter, r *http.Request) {
 	videoID := r.URL.Query().Get("videoId")
 	continuation := r.URL.Query().Get("continuation")
-	if videoID == "failchat001" {
+	if strings.HasPrefix(videoID, "failchat") {
 		mu.Lock()
 		failures[videoID]++
 		attempt := failures[videoID]
