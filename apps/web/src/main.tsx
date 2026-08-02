@@ -1,6 +1,7 @@
 import { FormEvent, StrictMode, useEffect, useState, type ReactNode } from 'react';
 import { createRoot } from 'react-dom/client';
 import './styles.css';
+import { ReservationCreatePage, ReservationDetailPage, ReservationListPage } from './reservation-pages';
 import { YouTubePlayer } from './youtube-player';
 
 type Stream = {
@@ -36,6 +37,10 @@ function App() {
   useEffect(() => { const listener = () => setPath(window.location.pathname); window.addEventListener('popstate', listener); return () => window.removeEventListener('popstate', listener); }, []);
   if (path === '/' || path === '/register') return <RegisterPage />;
   if (path === '/streams') return <ListPage />;
+  if (path === '/reservations') return <ReservationListPage navigation={<Navigation />} navigate={navigate} />;
+  if (path === '/reservations/new') return <ReservationCreatePage navigation={<Navigation />} navigate={navigate} />;
+  const reservationMatch = path.match(/^\/reservations\/([^/]+)$/);
+  if (reservationMatch) return <ReservationDetailPage id={reservationMatch[1]} navigation={<Navigation />} navigate={navigate} />;
   const chatMatch = path.match(/^\/streams\/([^/]+)\/chat$/);
   if (chatMatch) return <ChatPageView id={chatMatch[1]} />;
   const match = path.match(/^\/streams\/([^/]+)$/);
@@ -43,7 +48,7 @@ function App() {
   return <NotFoundPage />;
 }
 
-function Navigation() { return <nav aria-label="主要ナビゲーション"><button className="link" onClick={() => navigate('/streams')}>登録済み配信</button><button className="link" onClick={() => navigate('/register')}>配信を登録</button></nav>; }
+function Navigation() { return <nav aria-label="主要ナビゲーション"><button className="link" onClick={() => navigate('/reservations')}>解析予約</button><button className="link" onClick={() => navigate('/streams')}>登録済み配信</button><button className="link" onClick={() => navigate('/register')}>配信を登録</button></nav>; }
 
 function RegisterPage() {
   const [url, setUrl] = useState(''); const [preview, setPreview] = useState<Stream | null>(null); const [error, setError] = useState(''); const [loading, setLoading] = useState(false); const [registering, setRegistering] = useState(false);
