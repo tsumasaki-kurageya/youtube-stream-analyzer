@@ -13,6 +13,7 @@ import (
 	chatapi "github.com/tsumasaki-kurageya/youtube-stream-analyzer/apps/api/internal/chat"
 	collectionapi "github.com/tsumasaki-kurageya/youtube-stream-analyzer/apps/api/internal/collection"
 	"github.com/tsumasaki-kurageya/youtube-stream-analyzer/apps/api/internal/platform"
+	searchapi "github.com/tsumasaki-kurageya/youtube-stream-analyzer/apps/api/internal/search"
 	streamapi "github.com/tsumasaki-kurageya/youtube-stream-analyzer/apps/api/internal/stream"
 	transcriptapi "github.com/tsumasaki-kurageya/youtube-stream-analyzer/apps/api/internal/transcript"
 	"github.com/tsumasaki-kurageya/youtube-stream-analyzer/apps/api/internal/youtube"
@@ -50,6 +51,7 @@ func main() {
 	collectionHandler := collectionapi.NewHandler(collectionapi.NewRepository(db))
 	chatHandler := chatapi.NewHandler(chatapi.NewRepository(db))
 	transcriptHandler := transcriptapi.NewHandler(transcriptapi.NewRepository(db))
+	searchHandler := searchapi.NewHandler(searchapi.NewRepository(db))
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /api/health", writeOK)
@@ -80,6 +82,7 @@ func main() {
 		"GET /api/streams/{streamId}/transcript-segments",
 		transcriptHandler.List,
 	)
+	mux.HandleFunc("GET /api/streams/{streamId}/search", searchHandler.Search)
 
 	server := &http.Server{Addr: addr, Handler: mux, ReadHeaderTimeout: 5 * time.Second}
 	go func() {
