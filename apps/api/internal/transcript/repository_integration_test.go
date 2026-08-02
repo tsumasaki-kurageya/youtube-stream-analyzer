@@ -10,7 +10,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-func TestListAndRangeUseStableTimeOrdering(t *testing.T) {
+func TestListUsesStableCursorPagingAndRangeFilters(t *testing.T) {
 	url := os.Getenv("YSA_TEST_DATABASE_URL")
 	if url == "" {
 		t.Skip("YSA_TEST_DATABASE_URL is not set")
@@ -40,7 +40,7 @@ func TestListAndRangeUseStableTimeOrdering(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, item := range []struct {
-		id        string
+		id         string
 		start, end int64
 	}{
 		{"b", 1000, 1700}, {"a", 1000, 1600}, {"c", 2000, 2800},
@@ -51,14 +51,14 @@ func TestListAndRangeUseStableTimeOrdering(t *testing.T) {
 	}
 
 	repository := NewRepository(db)
-	first, err := repository.List(ctx, streamID, 2, "")
+	first, err := repository.List(ctx, streamID, 2, "", nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if len(first.Items) != 2 || first.NextCursor == nil {
 		t.Fatalf("unexpected first page: %#v", first)
 	}
-	second, err := repository.List(ctx, streamID, 2, *first.NextCursor)
+	second, err := repository.List(ctx, streamID, 2, *first.NextCursor, nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -66,11 +66,12 @@ func TestListAndRangeUseStableTimeOrdering(t *testing.T) {
 		t.Fatalf("unexpected second page: %#v", second)
 	}
 
-	overlap, err := repository.Range(ctx, streamID, 1500, 2100)
+	fromMS, toMS := int64(1500), int64(2100)
+	overlap, err := repository.List(ctx, streamID, 10, "", &fromMS, &toMS)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(overlap) != 3 {
+	if len(overlap.Items) != 3 {
 		t.Fatalf("expected three overlapping segments, got %#v", overlap)
 	}
 }
