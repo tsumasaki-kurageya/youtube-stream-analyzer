@@ -1,6 +1,7 @@
 import { FormEvent, StrictMode, useEffect, useState, type ReactNode } from 'react';
 import { createRoot } from 'react-dom/client';
 import './styles.css';
+import { YouTubePlayer } from './youtube-player';
 
 type Stream = {
   id: string; youtubeVideoId: string; sourceUrl: string; title: string; channelTitle: string;
@@ -61,7 +62,7 @@ function ListPage() {
 function DetailPage({ id }: { id: string }) {
   const [stream, setStream] = useState<Stream | null>(null); const [error, setError] = useState(''); const [loading, setLoading] = useState(true);
   useEffect(() => { (async () => { try { const response = await fetch(`/api/streams/${id}`); if (!response.ok) throw new Error(await problemMessage(response)); setStream((await response.json()) as Stream); } catch (reason) { setError(reason instanceof Error ? reason.message : '配信情報を取得できませんでした。'); } finally { setLoading(false); } })(); }, [id]);
-  return <main><Navigation />{loading && <p role="status">読み込み中…</p>}{error && <section><h1>配信を表示できません</h1><p role="alert" className="error">{error}</p><button onClick={() => navigate('/streams')}>一覧へ戻る</button></section>}{stream && <><header><p className="eyebrow">登録済み配信</p><h1>{stream.title}</h1></header><StreamCard stream={stream}><p><a href={stream.sourceUrl} target="_blank" rel="noreferrer">YouTubeで元配信を開く</a></p><button className="secondary" onClick={() => navigate('/streams')}>一覧へ戻る</button></StreamCard><CollectionPanel streamId={stream.id} /></>}</main>;
+  return <main><Navigation />{loading && <p role="status">読み込み中…</p>}{error && <section><h1>配信を表示できません</h1><p role="alert" className="error">{error}</p><button onClick={() => navigate('/streams')}>一覧へ戻る</button></section>}{stream && <><header><p className="eyebrow">登録済み配信</p><h1>{stream.title}</h1></header><YouTubePlayer videoId={stream.youtubeVideoId} sourceUrl={stream.sourceUrl} durationSeconds={stream.durationSeconds} /><StreamCard stream={stream}><p><a href={stream.sourceUrl} target="_blank" rel="noreferrer">YouTubeで元配信を開く</a></p><button className="secondary" onClick={() => navigate('/streams')}>一覧へ戻る</button></StreamCard><CollectionPanel streamId={stream.id} /></>}</main>;
 }
 
 function CollectionPanel({ streamId }: { streamId: string }) {
