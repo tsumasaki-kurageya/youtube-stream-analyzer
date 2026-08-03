@@ -60,7 +60,7 @@ class E2EHandler(BaseHTTPRequestHandler):
     database_url: str
 
     def do_GET(self) -> None:  # noqa: N802
-        if self.path == "/health":
+        if self.path in {"/", "/health"}:
             self._write_json(HTTPStatus.OK, {"status": "ok"})
             return
         reservation_id = self._reservation_id("/job-count")
