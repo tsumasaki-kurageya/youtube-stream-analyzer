@@ -24,6 +24,10 @@ func main() {
 			_, _ = fmt.Fprint(w, `{"tracks":[]}`)
 			return
 		}
+		if strings.HasPrefix(videoID, "m4colfail") {
+			http.Error(w, "M4 permanent transcript fixture failure", http.StatusServiceUnavailable)
+			return
+		}
 		if strings.HasPrefix(videoID, "m3fail") {
 			mu.Lock()
 			alreadyFailed := failedOnce[videoID]
