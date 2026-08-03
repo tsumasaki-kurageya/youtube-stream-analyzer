@@ -12,6 +12,7 @@ from urllib.request import Request, urlopen
 from ysa_worker.chat_replay import (
     ChatReplayAuthenticationError,
     ChatReplayGateway,
+    ChatReplayNotReady,
     ChatReplayProtocolError,
     ChatReplayTemporaryError,
     ChatReplayUnavailable,
@@ -161,6 +162,8 @@ class ArchiveReadinessGateway:
         try:
             self.chat_gateway.fetch_page(video_id, stream_started_at)
             return True
+        except ChatReplayNotReady:
+            return False
         except ChatReplayUnavailable as error:
             if allow_missing:
                 return False
