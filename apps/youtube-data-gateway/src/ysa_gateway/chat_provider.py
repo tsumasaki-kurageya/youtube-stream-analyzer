@@ -6,7 +6,7 @@ from datetime import UTC, datetime
 from typing import Any, cast
 
 import requests
-from requests import Response, Session
+from requests import Response
 from yt_dlp import YoutubeDL
 from yt_dlp.extractor.youtube import YoutubeBaseInfoExtractor
 from yt_dlp.utils import DownloadError, RegexNotFoundError
