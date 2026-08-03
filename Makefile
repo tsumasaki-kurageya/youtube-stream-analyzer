@@ -2,7 +2,7 @@ GRAPHIFY_BIN ?= graphify
 GRAPHIFY_EXTRACT_ARGS ?= --code-only
 PYTHON ?= python3
 
-.PHONY: setup dev dev-stop dev-logs db-up db-down db-migrate db-rollback api web worker gateway worker-check gateway-check contracts-check test lint format check graphify graphify-update
+.PHONY: setup dev dev-stop dev-logs db-up db-down db-migrate db-rollback api web worker gateway worker-check gateway-check contracts-check deployment-check test lint format check graphify graphify-update
 
 setup:
 	cd apps/web && npm install
@@ -32,7 +32,7 @@ worker:
 	cd apps/worker && $(PYTHON) -m ysa_worker.main
 
 gateway:
-	cd apps/youtube-data-gateway && $(PYTHON) -m ysa_gateway.app
+	cd apps/youtube-data-gateway && ysa-gateway
 
 worker-check:
 	cd apps/worker && ruff check . && mypy src tests && pytest
@@ -43,11 +43,15 @@ gateway-check:
 contracts-check:
 	@set -eu; for contract in contracts/*.yaml; do openapi-spec-validator "$$contract"; done
 
+deployment-check:
+	@bash scripts/check-deployment.sh
+
 dev: db-up db-migrate
 	@set -eu; \
 	trap 'kill 0' INT TERM EXIT; \
 	(cd apps/api && go run ./cmd/api) & \
 	(cd apps/web && npm run dev) & \
+	(cd apps/youtube-data-gateway && ysa-gateway) & \
 	(cd apps/worker && $(PYTHON) -m ysa_worker.main) & \
 	wait
 
