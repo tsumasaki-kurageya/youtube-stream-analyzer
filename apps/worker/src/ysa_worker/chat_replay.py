@@ -22,6 +22,10 @@ class ChatReplayTemporaryError(ChatReplayError):
     retryable = True
 
 
+class ChatReplayNotReady(ChatReplayTemporaryError):
+    code = "CHAT_REPLAY_NOT_READY"
+
+
 class ChatReplayProtocolError(ChatReplayError):
     code = "CHAT_REPLAY_PROTOCOL_CHANGED"
 
@@ -163,8 +167,9 @@ def _map_gateway_error(error: GatewayHTTPError) -> ChatReplayError:
         return ChatReplayAuthenticationError(problem.detail)
     if problem.code in {"CHAT_REPLAY_NOT_AVAILABLE", "YOUTUBE_ACCESS_DENIED"}:
         return ChatReplayUnavailable(problem.detail)
+    if problem.code == "SOURCE_NOT_READY":
+        return ChatReplayNotReady(problem.detail)
     if problem.retryable or problem.code in {
-        "SOURCE_NOT_READY",
         "YOUTUBE_RATE_LIMITED",
         "YOUTUBE_TEMPORARILY_UNAVAILABLE",
         "YOUTUBE_TIMEOUT",
