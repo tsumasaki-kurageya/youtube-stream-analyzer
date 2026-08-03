@@ -1,6 +1,8 @@
 import { defineConfig, devices } from '@playwright/test';
 
 const databaseUrl = process.env.YSA_DATABASE_URL ?? 'postgres://ysa:ysa@localhost:5432/youtube_stream_analyzer?sslmode=disable';
+const gatewayToken = 'e2e-gateway-token';
+const gatewayURL = 'http://127.0.0.1:18081';
 
 export default defineConfig({
   testDir: './e2e',
@@ -24,18 +26,10 @@ export default defineConfig({
       env: { YSA_YOUTUBE_STUB_ADDRESS: ':18080' },
     },
     {
-      command: 'go run ./cmd/chat-replay-stub',
-      cwd: '../api',
+      command: 'python tests/e2e_server.py',
+      cwd: '../youtube-data-gateway',
       port: 18081,
       reuseExistingServer: !process.env.CI,
-      env: { YSA_CHAT_REPLAY_STUB_ADDRESS: ':18081' },
-    },
-    {
-      command: 'go run ./cmd/transcript-stub',
-      cwd: '../api',
-      port: 18083,
-      reuseExistingServer: !process.env.CI,
-      env: { YSA_TRANSCRIPT_STUB_ADDRESS: ':18083' },
     },
     {
       command: 'go run ./cmd/api',
@@ -63,9 +57,10 @@ export default defineConfig({
         YSA_YOUTUBE_API_KEY: 'e2e-key',
         YSA_YOUTUBE_API_BASE_URL: 'http://127.0.0.1:18080',
         YSA_YOUTUBE_TIMEOUT_SECONDS: '2',
-        YSA_CHAT_REPLAY_BASE_URL: 'http://127.0.0.1:18081/replay',
+        YSA_GATEWAY_BEARER_TOKEN: gatewayToken,
+        YSA_CHAT_REPLAY_BASE_URL: gatewayURL,
         YSA_CHAT_REPLAY_TIMEOUT_SECONDS: '2',
-        YSA_TRANSCRIPT_BASE_URL: 'http://127.0.0.1:18083',
+        YSA_TRANSCRIPT_BASE_URL: gatewayURL,
         YSA_TRANSCRIPT_TIMEOUT_SECONDS: '2',
       },
     },

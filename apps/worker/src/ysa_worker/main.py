@@ -122,10 +122,15 @@ def run(settings: Settings, stop_event: threading.Event) -> None:
     verify_database(settings.database_url)
     chat_gateway = ChatReplayGateway(
         settings.chat_replay_base_url,
+        settings.gateway_bearer_token,
         settings.chat_replay_timeout_seconds,
     )
     transcript_gateway = (
-        TranscriptGateway(settings.transcript_base_url, settings.transcript_timeout_seconds)
+        TranscriptGateway(
+            settings.transcript_base_url,
+            settings.gateway_bearer_token,
+            settings.transcript_timeout_seconds,
+        )
         if settings.transcript_base_url
         else None
     )

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import Any, Literal
@@ -9,7 +10,9 @@ from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 
 from ysa_worker.chat_replay import (
+    ChatReplayAuthenticationError,
     ChatReplayGateway,
+    ChatReplayNotReady,
     ChatReplayProtocolError,
     ChatReplayTemporaryError,
     ChatReplayUnavailable,
@@ -56,13 +59,21 @@ class ArchiveReadinessGateway:
         youtube_base_url: str,
         chat_replay_base_url: str,
         timeout_seconds: float = 10,
+        gateway_bearer_token: str = "",
     ) -> None:
         if not api_key.strip():
             raise ValueError("YSA_YOUTUBE_API_KEY is required")
         self.api_key = api_key
         self.youtube_base_url = youtube_base_url.rstrip("/")
         self.timeout_seconds = timeout_seconds
-        self.chat_gateway = ChatReplayGateway(chat_replay_base_url, timeout_seconds)
+        token = gateway_bearer_token or os.environ.get(
+            "YSA_GATEWAY_BEARER_TOKEN", ""
+        ).strip()
+        self.chat_gateway = ChatReplayGateway(
+            chat_replay_base_url,
+            token,
+            timeout_seconds,
+        )
 
     def check(
         self,
@@ -151,6 +162,8 @@ class ArchiveReadinessGateway:
         try:
             self.chat_gateway.fetch_page(video_id, stream_started_at)
             return True
+        except ChatReplayNotReady:
+            return False
         except ChatReplayUnavailable as error:
             if allow_missing:
                 return False
@@ -161,8 +174,8 @@ class ArchiveReadinessGateway:
             raise ArchiveReadinessTemporaryError(
                 "chat replay readiness check failed"
             ) from error
-        except ChatReplayProtocolError as error:
-            raise ArchiveReadinessError("chat replay source changed") from error
+        except (ChatReplayProtocolError, ChatReplayAuthenticationError) as error:
+            raise ArchiveReadinessError("chat replay Gateway failed") from error
 
 
 def _first_item(payload: Any) -> dict[str, Any]:

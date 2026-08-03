@@ -11,6 +11,7 @@ class Settings:
     poll_interval_seconds: float
     heartbeat_interval_seconds: float
     lease_seconds: int
+    gateway_bearer_token: str
     chat_replay_base_url: str
     chat_replay_timeout_seconds: float
     transcript_base_url: str
@@ -38,6 +39,10 @@ class Settings:
         if heartbeat_interval >= lease_seconds:
             raise ValueError("heartbeat interval must be shorter than the lease")
 
+        gateway_bearer_token = os.environ.get("YSA_GATEWAY_BEARER_TOKEN", "").strip()
+        if not gateway_bearer_token:
+            raise ValueError("YSA_GATEWAY_BEARER_TOKEN is required")
+
         chat_replay_base_url = os.environ.get("YSA_CHAT_REPLAY_BASE_URL", "").strip()
         if not chat_replay_base_url:
             raise ValueError("YSA_CHAT_REPLAY_BASE_URL is required")
@@ -58,6 +63,7 @@ class Settings:
             poll_interval_seconds=poll_interval,
             heartbeat_interval_seconds=heartbeat_interval,
             lease_seconds=lease_seconds,
+            gateway_bearer_token=gateway_bearer_token,
             chat_replay_base_url=chat_replay_base_url,
             chat_replay_timeout_seconds=chat_replay_timeout,
             transcript_base_url=transcript_base_url,
