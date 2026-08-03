@@ -35,7 +35,7 @@ class FixtureChatProvider:
                 raise GatewayError(
                     status=503,
                     code="YOUTUBE_TEMPORARILY_UNAVAILABLE",
-                    detail="temporary fixture failure",
+                    detail="chat replay service is temporarily unavailable",
                     retryable=True,
                 )
 
