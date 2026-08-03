@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import Any, Literal
@@ -56,17 +57,20 @@ class ArchiveReadinessGateway:
         api_key: str,
         youtube_base_url: str,
         chat_replay_base_url: str,
-        gateway_bearer_token: str,
         timeout_seconds: float = 10,
+        gateway_bearer_token: str = "",
     ) -> None:
         if not api_key.strip():
             raise ValueError("YSA_YOUTUBE_API_KEY is required")
         self.api_key = api_key
         self.youtube_base_url = youtube_base_url.rstrip("/")
         self.timeout_seconds = timeout_seconds
+        token = gateway_bearer_token or os.environ.get(
+            "YSA_GATEWAY_BEARER_TOKEN", ""
+        ).strip()
         self.chat_gateway = ChatReplayGateway(
             chat_replay_base_url,
-            gateway_bearer_token,
+            token,
             timeout_seconds,
         )
 
