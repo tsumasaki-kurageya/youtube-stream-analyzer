@@ -188,13 +188,18 @@ class FakeTranscriptApi:
         return [FakeTranscript()]
 
 
-def test_transcript_provider_uses_signed_track_and_page_tokens(settings: Settings) -> None:
-    codec = TokenCodec(settings.continuation_secret)
-    provider = YoutubeTranscriptProvider(settings, codec, FakeTranscriptApi())
-    provider._settings = Settings(  # noqa: SLF001 - controlled page-size test
+def test_transcript_provider_uses_stable_track_id_and_signed_page_token(
+    settings: Settings,
+) -> None:
+    page_settings = Settings(
         bearer_tokens=settings.bearer_tokens,
         continuation_secret=settings.continuation_secret,
         transcript_page_size=1,
+    )
+    provider = YoutubeTranscriptProvider(
+        page_settings,
+        TokenCodec(page_settings.continuation_secret),
+        FakeTranscriptApi(),
     )
 
     tracks = provider.list_tracks("abcdefghijk")
@@ -202,6 +207,16 @@ def test_transcript_provider_uses_signed_track_and_page_tokens(settings: Setting
     track = tracks.tracks[0]
     assert track.language_code == "ja"
     assert track.is_auto_generated is True
+
+    rotated_provider = YoutubeTranscriptProvider(
+        Settings(
+            bearer_tokens=settings.bearer_tokens,
+            continuation_secret="c" * 32,
+        ),
+        TokenCodec("c" * 32),
+        FakeTranscriptApi(),
+    )
+    assert rotated_provider.list_tracks("abcdefghijk").tracks[0].id == track.id
 
     first = provider.get_page("abcdefghijk", track.id, None)
     assert [segment.text for segment in first.segments] == ["first"]
