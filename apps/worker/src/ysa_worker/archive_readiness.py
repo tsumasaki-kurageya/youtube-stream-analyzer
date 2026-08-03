@@ -9,6 +9,7 @@ from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 
 from ysa_worker.chat_replay import (
+    ChatReplayAuthenticationError,
     ChatReplayGateway,
     ChatReplayProtocolError,
     ChatReplayTemporaryError,
@@ -55,6 +56,7 @@ class ArchiveReadinessGateway:
         api_key: str,
         youtube_base_url: str,
         chat_replay_base_url: str,
+        gateway_bearer_token: str,
         timeout_seconds: float = 10,
     ) -> None:
         if not api_key.strip():
@@ -62,7 +64,11 @@ class ArchiveReadinessGateway:
         self.api_key = api_key
         self.youtube_base_url = youtube_base_url.rstrip("/")
         self.timeout_seconds = timeout_seconds
-        self.chat_gateway = ChatReplayGateway(chat_replay_base_url, timeout_seconds)
+        self.chat_gateway = ChatReplayGateway(
+            chat_replay_base_url,
+            gateway_bearer_token,
+            timeout_seconds,
+        )
 
     def check(
         self,
@@ -161,8 +167,8 @@ class ArchiveReadinessGateway:
             raise ArchiveReadinessTemporaryError(
                 "chat replay readiness check failed"
             ) from error
-        except ChatReplayProtocolError as error:
-            raise ArchiveReadinessError("chat replay source changed") from error
+        except (ChatReplayProtocolError, ChatReplayAuthenticationError) as error:
+            raise ArchiveReadinessError("chat replay Gateway failed") from error
 
 
 def _first_item(payload: Any) -> dict[str, Any]:
