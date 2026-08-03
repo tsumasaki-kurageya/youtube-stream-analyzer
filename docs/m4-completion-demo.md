@@ -101,9 +101,14 @@ scheduled または monitoring
 M3確認後、次のコマンドでDBから証跡を抽出します。
 
 ```bash
-make m4-demo-report \
-  RESERVATION_ID='<reservation-uuid>' \
-  M4_DEMO_FLAGS='-strict -worker-restart-confirmed -m3-sync-confirmed -m3-search-confirmed -m3-seek-confirmed'
+cd apps/api
+go run ./cmd/m4-demo-report \
+  -reservation-id '<reservation-uuid>' \
+  -strict \
+  -worker-restart-confirmed \
+  -m3-sync-confirmed \
+  -m3-search-confirmed \
+  -m3-seek-confirmed
 ```
 
 JSONが必要な場合は `-format json`、ファイル出力する場合は `-output /tmp/m4-demo-report.md` を追加します。
