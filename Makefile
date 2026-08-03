@@ -2,7 +2,7 @@ GRAPHIFY_BIN ?= graphify
 GRAPHIFY_EXTRACT_ARGS ?= --code-only
 PYTHON ?= python3
 
-.PHONY: setup dev dev-stop dev-logs db-up db-down db-migrate db-rollback api web worker worker-check contracts-check test lint format check m4-demo-report graphify graphify-update
+.PHONY: setup dev dev-stop dev-logs db-up db-down db-migrate db-rollback api web worker worker-check contracts-check test lint format check graphify graphify-update
 
 setup:
 	cd apps/web && npm install
@@ -70,10 +70,6 @@ check:
 	cd apps/web && npm run typecheck && npm run build
 	$(MAKE) worker-check
 	$(MAKE) contracts-check
-
-m4-demo-report:
-	@test -n "$(RESERVATION_ID)" || { echo "RESERVATION_ID is required" >&2; exit 1; }
-	cd apps/api && go run ./cmd/m4-demo-report -reservation-id "$(RESERVATION_ID)" $(M4_DEMO_FLAGS)
 
 graphify:
 	@command -v "$(GRAPHIFY_BIN)" >/dev/null 2>&1 || { \
