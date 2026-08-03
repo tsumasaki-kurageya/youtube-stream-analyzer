@@ -19,15 +19,17 @@ YouTube Stream Analyzerを構成するシステム、各システムの責務、
 - Main APIは機能単位に分割したモジュラーモノリスとする
 - 時間のかかる収集・解析処理はPythonワーカーへ分離する
 - ワーカーはMain APIとは別プロセス・別コンテナとして実行する
+- YouTubeのチャットリプレイ・字幕取得は独立した内部Gatewayへ隔離する
+- GatewayはWorkerとは別プロセス・別コンテナとして実行する
 - データベースはPostgreSQLを使用する
 - 配信データとコンテキストデータは論理的に分離するが、初期は同一PostgreSQL内に配置する
 - 大容量ファイルと再解析可能な生データはAzure Blob Storageへ保存する
 - 初期のジョブ連携にはPostgreSQLのジョブテーブルを使用する
-- 必要性が明確になるまで本格的なマイクロサービス分割は行わない
+- 必要性が明確になるまでMain API内部モジュールのマイクロサービス分割は行わない
 
 この構成を、次のように表現する。
 
-> **モノレポ + Goモジュラーモノリス + 独立Pythonワーカー**
+> **モノレポ + Goモジュラーモノリス + 独立Pythonワーカー + YouTube Data Gateway**
 
 ---
 
@@ -43,11 +45,12 @@ flowchart LR
     Blob[(Azure Blob Storage)]
 
     StreamWorker[配信収集ワーカー\nPython]
+    Gateway[YouTube Data Gateway\nPython]
     ContextWorker[コンテキスト収集ワーカー\nPython]
     AnalysisWorker[分析ワーカー\nPython / 将来]
 
     YouTube[YouTube]
-    Sources[周辺情報源\nWeb・字幕・手動入力]
+    Sources[周辺情報源\nWeb・手動入力]
 
     User --> Web
     Web -->|HTTP / JSON| API
@@ -57,7 +60,9 @@ flowchart LR
     API -->|ファイル参照| Blob
 
     StreamWorker -->|ジョブ取得・進捗更新| DB
-    StreamWorker -->|メタデータ・チャット・字幕| YouTube
+    StreamWorker -->|配信状態・メタデータ| YouTube
+    StreamWorker -->|private HTTP / 正規化済み契約| Gateway
+    Gateway -->|チャットリプレイ・字幕取得| YouTube
     StreamWorker -->|収集結果保存| DB
     StreamWorker -->|生データ保存| Blob
 
@@ -69,7 +74,7 @@ flowchart LR
     AnalysisWorker -->|候補・分析結果保存| DB
 ```
 
-Main APIはシステムの制御面を担当する。外部データの収集やAI処理など、長時間・高負荷・再試行を伴う処理はワーカーが担当する。
+Main APIはシステムの制御面を担当する。外部データの収集やAI処理など、長時間・高負荷・再試行を伴う処理はワーカーが担当する。YouTube Data Gatewayは、変更されやすいYouTube固有の取得方式と認証情報をWorkerのジョブ管理・保存処理から隔離する。
 
 ---
 
@@ -144,17 +149,18 @@ apps/api/internal/
 
 ### 4.3 配信収集ワーカー
 
-YouTubeから配信データを取得し、正規化して保存する。
+収集ジョブを管理し、YouTube Data APIとYouTube Data Gatewayから取得した配信データを正規化・保存する。
 
 主な責務:
 
-- 配信メタデータ取得
-- ライブチャットまたはチャットリプレイ取得
-- 字幕取得
+- 配信メタデータと配信状態の取得
+- YouTube Data Gatewayのページ単位呼び出し
+- continuationによる全ページ取得の制御
 - 重複排除
 - 動画開始からの経過時刻への正規化
 - PostgreSQLへの保存
 - 生データのBlob保存
+- ジョブclaim、lease、heartbeat
 - ジョブ進捗更新
 - リトライとエラー記録
 
@@ -162,13 +168,43 @@ YouTubeから配信データを取得し、正規化して保存する。
 
 - Python
 - YouTube Data API
-- yt-dlp
 - HTTPX
 - Pydantic
 - psycopg
 - FFmpeg（必要なフェーズで導入）
 - Azure Storage SDK
 - pytest
+
+### 4.3.1 YouTube Data Gateway
+
+YouTubeのチャットリプレイ・字幕取得方式を、配信収集ワーカーから隔離する内部サービスである。
+
+主な責務:
+
+- 実YouTubeチャットリプレイの取得
+- 実YouTube字幕トラック・字幕セグメントの取得
+- YouTube固有レスポンスの解釈
+- Worker向け契約済みJSONへの正規化
+- データなし、アクセス拒否、一時障害、外部仕様変更の分類
+- Cookie等の取得用認証情報の安全な保持
+- health / readinessの提供
+
+初版ではチャットと字幕を同じサービスに配置する。Gatewayはステートレスとし、収集ジョブや取得結果を永続化しない。収集結果の正本はPostgreSQLであり、ジョブ状態・進捗・再実行は配信収集ワーカーが管理する。
+
+採用技術:
+
+- Python 3.12
+- FastAPI
+- Pydantic v2
+- Uvicorn
+- HTTPX
+- yt-dlp等の取得ライブラリ
+- pytest
+
+契約と設計判断は次を正本とする。
+
+- `contracts/youtube-data-gateway.yaml`
+- `docs/decisions/0004-youtube-data-gateway-service.md`
 
 ### 4.4 コンテキスト収集ワーカー
 
@@ -323,11 +359,14 @@ sequenceDiagram
     participant API as Go Main API
     participant DB as PostgreSQL
     participant Worker as Python Worker
+    participant Gateway as YouTube Data Gateway
 
     UI->>API: 収集開始
     API->>DB: ジョブをqueuedで登録
     API-->>UI: 202 Accepted
     Worker->>DB: 実行可能ジョブを排他取得
+    Worker->>Gateway: チャット・字幕ページ取得
+    Gateway-->>Worker: 正規化済みJSON
     Worker->>DB: 状態・進捗を更新
     Worker->>DB: 収集結果を保存
     UI->>API: 状態取得
@@ -368,7 +407,17 @@ LIMIT 1;
 - ワーカーはDBからジョブを取得する
 - ワーカーは進捗と結果をDBへ保存する
 
-この方式により、サービス間API、認証、タイムアウト、リトライ、APIバージョニングを初期段階から持ち込まない。
+Main APIとワーカー間では、サービス間API、認証、タイムアウト、リトライ、APIバージョニングを持ち込まない。
+
+### 配信収集ワーカーとYouTube Data Gateway
+
+- Private Network上のHTTP / JSON
+- OpenAPI 3.1で契約を管理する
+- `/v1/*`はBearer tokenを必須とする
+- Gatewayは1リクエストにつき1ページを返す
+- Workerがページング、ジョブ進捗、再実行、保存を管理する
+- GatewayはYouTube生レスポンスやCookieをWorkerへ返さない
+- health / readinessだけはプラットフォームprobe用に認証不要とする
 
 ---
 
@@ -379,13 +428,10 @@ LIMIT 1;
 ```text
 youtube-stream-analyzer/
 ├─ apps/
-│  ├─ web/                  # React Web UI
-│  └─ api/                  # Go Main API
-│
-├─ workers/
-│  ├─ stream-collector/     # 配信収集
-│  ├─ context-collector/    # コンテキスト収集
-│  └─ analysis-worker/      # 将来の分析処理
+│  ├─ web/                       # React Web UI
+│  ├─ api/                       # Go Main API
+│  ├─ worker/                    # Python配信収集ワーカー
+│  └─ youtube-data-gateway/      # 実チャット・字幕取得内部サービス
 │
 ├─ database/
 │  ├─ migrations/
@@ -393,18 +439,19 @@ youtube-stream-analyzer/
 │  └─ seeds/
 │
 ├─ contracts/
-│  ├─ openapi/
-│  └─ schemas/
+│  ├─ openapi.yaml
+│  └─ youtube-data-gateway.yaml
 │
 ├─ deploy/
 │  ├─ docker/
+│  ├─ railway/
 │  └─ azure/
 │
 ├─ docs/
 └─ compose.yaml
 ```
 
-モノレポであっても、Web UI、Main API、各ワーカーは別々にビルド・デプロイできる構成とする。
+モノレポであっても、Web UI、Main API、Worker、YouTube Data Gatewayは別々にビルド・デプロイできる構成とする。
 
 ---
 
@@ -420,7 +467,8 @@ youtube-stream-analyzer/
 | API契約 | OpenAPI、oapi-codegen |
 | DBアクセス | pgx、sqlc |
 | DBマイグレーション | goose |
-| 配信収集 | Python、YouTube Data API、yt-dlp、HTTPX |
+| 配信収集Worker | Python、YouTube Data API、HTTPX、Pydantic、psycopg |
+| YouTube Data Gateway | Python、FastAPI、Pydantic、Uvicorn、HTTPX、yt-dlp等 |
 | コンテキスト収集 | Python、Playwright、trafilatura、Beautiful Soup |
 | AI処理 | LLM SDK、Embedding API |
 | データベース | PostgreSQL、JSONB、全文検索、pgvector |
@@ -450,6 +498,7 @@ youtube-stream-analyzer/
 - OpenSearch
 - サービスメッシュ
 - Main API内部モジュールのマイクロサービス化
+- チャットと字幕Gatewayの個別サービス分割
 
 これらを恒久的に否定するものではない。運用上または性能上の具体的な課題が発生した場合に導入を判断する。
 
@@ -468,6 +517,8 @@ youtube-stream-analyzer/
 - モノレポのCI時間や依存管理が開発速度を阻害するようになった
 
 リポジトリ分割とサービス分割は別の判断とする。モノレポのまま複数サービスを運用することも、単一サービスを複数リポジトリで管理することも可能である。
+
+YouTube Data Gatewayは、Main API内部モジュールの分割ではなく、外部仕様・取得用認証情報・取得ライブラリをWorkerから隔離するための明確な境界として例外的に初期導入する。
 
 ---
 
@@ -493,6 +544,10 @@ youtube-stream-analyzer/
 
 YouTube取得、Web取得、LLM、Embedding、Blob Storageは、アプリケーションの中心ロジックから分離する。
 
+### 秘密情報を収集データへ混入させない
+
+Cookie、API key、Authorization headerはGatewayの実行時設定としてのみ扱い、DB、通常ログ、レスポンス、CI artifactへ保存しない。
+
 ---
 
 ## 13. 現時点の結論
@@ -504,6 +559,7 @@ YouTube Stream Analyzerは、次の構成から開始する。
 Web UI            React / TypeScript
 Main API          Goのモジュラーモノリス
 長時間処理        独立したPythonワーカー
+YouTube実データ   独立したYouTube Data Gateway
 データベース      共有PostgreSQL + スキーマ分離
 意味検索          pgvector
 ファイル保存      Azure Blob Storage
@@ -512,4 +568,4 @@ Main API          Goのモジュラーモノリス
 マイクロサービス  必要性が発生してから検討
 ```
 
-この構成により、初期の実装・運用を過度に複雑化せず、将来のリアルタイム収集、コンテキスト収集、分析、切り抜き制作支援へ拡張できる状態を作る。
+この構成により、初期の実装・運用を過度に複雑化せず、YouTube固有仕様を隔離しながら、将来のリアルタイム収集、コンテキスト収集、分析、切り抜き制作支援へ拡張できる状態を作る。
