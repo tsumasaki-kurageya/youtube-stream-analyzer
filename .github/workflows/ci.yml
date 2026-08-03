@@ -64,6 +64,8 @@ jobs:
         run: npm run test:e2e
       - name: Validate repository and application foundations
         run: make check
+      - name: Build Railway deployment images
+        run: make deployment-check
       - name: Verify migration rollback and reapply
         run: |
           make db-rollback
