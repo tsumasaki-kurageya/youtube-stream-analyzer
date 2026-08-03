@@ -43,14 +43,29 @@ class FixtureChatProvider:
         if continuation is None:
             return ChatReplayPage(
                 messages=[
-                    _chat("message-2", "Second user", "second page boundary", start + timedelta(seconds=2)),
-                    _chat("message-1", "First user", "first message", start + timedelta(seconds=1)),
+                    _chat(
+                        "message-2",
+                        "Second user",
+                        "second page boundary",
+                        start + timedelta(seconds=2),
+                    ),
+                    _chat(
+                        "message-1",
+                        "First user",
+                        "first message",
+                        start + timedelta(seconds=1),
+                    ),
                 ],
                 continuation="page-2",
             )
         return ChatReplayPage(
             messages=[
-                _chat("message-3", "Third user", "third message", start + timedelta(seconds=3))
+                _chat(
+                    "message-3",
+                    "Third user",
+                    "third message",
+                    start + timedelta(seconds=3),
+                )
             ],
             continuation=None,
         )
