@@ -23,8 +23,8 @@ from .core import (
 from .providers import (
     ChatProvider,
     TranscriptProvider,
-    YtDlpChatProvider,
     YoutubeTranscriptProvider,
+    YtDlpChatProvider,
 )
 
 LOGGER = logging.getLogger("ysa.gateway")
@@ -207,3 +207,7 @@ def _problem_response(
 def _request_id(request: Request) -> str:
     value = getattr(request.state, "request_id", None)
     return value if isinstance(value, str) and value else str(uuid.uuid4())
+
+
+if __name__ == "__main__":
+    run()
