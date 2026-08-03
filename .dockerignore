@@ -1,0 +1,13 @@
+.git
+.github
+.devcontainer
+**/.venv
+**/__pycache__
+**/.pytest_cache
+**/.mypy_cache
+**/.ruff_cache
+**/node_modules
+**/dist
+**/playwright-report
+**/test-results
+graphify-out
