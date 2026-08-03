@@ -1,15 +1,14 @@
 from __future__ import annotations
 
-import json
 from dataclasses import dataclass
 from typing import Any
-from urllib.error import HTTPError, URLError
-from urllib.parse import urlencode
-from urllib.request import Request, urlopen
+
+from ysa_worker.gateway_http import GatewayHTTPError, get_json
 
 
 class TranscriptError(RuntimeError):
     code = "TRANSCRIPT_ERROR"
+    retryable = False
 
 
 class TranscriptAccessDenied(TranscriptError):
@@ -22,10 +21,15 @@ class TranscriptUnavailable(TranscriptError):
 
 class TranscriptTemporaryError(TranscriptError):
     code = "TRANSCRIPT_TEMPORARILY_UNAVAILABLE"
+    retryable = True
 
 
 class TranscriptProtocolError(TranscriptError):
     code = "TRANSCRIPT_SOURCE_CHANGED"
+
+
+class TranscriptAuthenticationError(TranscriptError):
+    code = "TRANSCRIPT_GATEWAY_UNAUTHORIZED"
 
 
 @dataclass(frozen=True)
@@ -55,8 +59,14 @@ class TranscriptResult:
 
 
 class TranscriptGateway:
-    def __init__(self, base_url: str, timeout_seconds: float = 15) -> None:
+    def __init__(
+        self,
+        base_url: str,
+        bearer_token: str,
+        timeout_seconds: float = 15,
+    ) -> None:
         self.base_url = base_url.rstrip("/")
+        self.bearer_token = bearer_token
         self.timeout_seconds = timeout_seconds
 
     def collect(self, video_id: str) -> TranscriptResult:
@@ -67,7 +77,10 @@ class TranscriptGateway:
         return TranscriptResult(track=track, segments=self.fetch_segments(video_id, track))
 
     def list_tracks(self, video_id: str) -> tuple[TranscriptTrack, ...]:
-        payload = self._get_json("tracks", {"videoId": video_id})
+        payload = self._get_json(
+            "/v1/transcripts/tracks",
+            {"videoId": video_id},
+        )
         return parse_tracks(payload)
 
     def fetch_segments(
@@ -80,7 +93,7 @@ class TranscriptGateway:
             query = {"videoId": video_id, "trackId": track.external_id}
             if continuation:
                 query["continuation"] = continuation
-            payload = self._get_json("segments", query)
+            payload = self._get_json("/v1/transcripts/segments", query)
             page, continuation = parse_segment_page(payload)
             segments.extend(page)
             if continuation is None:
@@ -92,28 +105,17 @@ class TranscriptGateway:
             raise TranscriptProtocolError("transcript page limit exceeded")
         return tuple(sorted(segments, key=lambda item: (item.start_milliseconds, item.external_id)))
 
-    def _get_json(self, resource: str, query: dict[str, str]) -> Any:
-        request = Request(
-            f"{self.base_url}/{resource}?{urlencode(query)}",
-            headers={"Accept": "application/json", "User-Agent": "ysa-worker/0.1"},
-        )
+    def _get_json(self, path: str, query: dict[str, str]) -> Any:
         try:
-            with urlopen(request, timeout=self.timeout_seconds) as response:
-                return json.load(response)
-        except HTTPError as error:
-            if error.code in {401, 403}:
-                raise TranscriptAccessDenied("transcript access was denied") from error
-            if error.code in {404, 410, 422}:
-                raise TranscriptUnavailable("transcript is unavailable") from error
-            if error.code == 429 or error.code >= 500:
-                raise TranscriptTemporaryError(
-                    "transcript service is temporarily unavailable"
-                ) from error
-            raise TranscriptProtocolError("unexpected transcript response") from error
-        except (TimeoutError, URLError) as error:
-            raise TranscriptTemporaryError("transcript request failed") from error
-        except (json.JSONDecodeError, UnicodeDecodeError) as error:
-            raise TranscriptProtocolError("invalid transcript response") from error
+            return get_json(
+                self.base_url,
+                path,
+                query,
+                self.bearer_token,
+                self.timeout_seconds,
+            )
+        except GatewayHTTPError as error:
+            raise _map_gateway_error(error) from error
 
 
 def select_track(tracks: tuple[TranscriptTrack, ...]) -> TranscriptTrack | None:
@@ -204,3 +206,22 @@ def parse_segment_page(
             )
         )
     return tuple(segments), continuation or None
+
+
+def _map_gateway_error(error: GatewayHTTPError) -> TranscriptError:
+    problem = error.problem
+    if problem.code == "GATEWAY_UNAUTHORIZED":
+        return TranscriptAuthenticationError(problem.detail)
+    if problem.code == "YOUTUBE_ACCESS_DENIED":
+        return TranscriptAccessDenied(problem.detail)
+    if problem.code == "TRANSCRIPT_NOT_AVAILABLE":
+        return TranscriptUnavailable(problem.detail)
+    if problem.retryable or problem.code in {
+        "SOURCE_NOT_READY",
+        "YOUTUBE_RATE_LIMITED",
+        "YOUTUBE_TEMPORARILY_UNAVAILABLE",
+        "YOUTUBE_TIMEOUT",
+        "GATEWAY_NOT_READY",
+    }:
+        return TranscriptTemporaryError(problem.detail)
+    return TranscriptProtocolError(problem.detail)
