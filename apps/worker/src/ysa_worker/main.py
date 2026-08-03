@@ -177,8 +177,6 @@ def run(settings: Settings, stop_event: threading.Event) -> None:
                 settings.youtube_timeout_seconds,
             ),
             settings.heartbeat_interval_seconds,
-            settings.chat_replay_base_url,
-            settings.gateway_bearer_token,
         )
 
     LOGGER.info("worker ready", extra={"worker_id": settings.worker_id})
