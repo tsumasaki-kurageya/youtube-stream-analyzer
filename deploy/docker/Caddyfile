@@ -1,0 +1,11 @@
+:{$PORT:8080} {
+    encode zstd gzip
+
+    handle /api/* {
+        reverse_proxy {$YSA_API_ORIGIN}
+    }
+
+    root * /srv
+    try_files {path} /index.html
+    file_server
+}
