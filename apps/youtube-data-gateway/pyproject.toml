@@ -1,0 +1,50 @@
+[project]
+name = "youtube-stream-analyzer-gateway"
+version = "0.1.0"
+description = "Private YouTube data gateway for normalized chat replay and transcript access"
+requires-python = ">=3.12"
+dependencies = [
+  "fastapi>=0.116,<1",
+  "requests>=2.32,<3",
+  "uvicorn>=0.35,<1",
+  "yt-dlp>=2026.2.4,<2027",
+  "youtube-transcript-api>=1.2.4,<2",
+]
+
+[project.optional-dependencies]
+dev = [
+  "httpx>=0.28,<1",
+  "mypy>=1.17,<2",
+  "pytest>=8.4,<9",
+  "ruff>=0.12,<1",
+]
+
+[project.scripts]
+ysa-youtube-data-gateway = "ysa_gateway.app:run"
+
+[build-system]
+requires = ["hatchling>=1.27"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/ysa_gateway"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+files = ["src", "tests"]
+
+[[tool.mypy.overrides]]
+module = ["yt_dlp.*", "youtube_transcript_api.*"]
+ignore_missing_imports = true

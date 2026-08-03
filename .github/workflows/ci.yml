@@ -48,6 +48,9 @@ jobs:
       - name: Install worker dependencies
         working-directory: apps/worker
         run: python -m pip install -e '.[dev]'
+      - name: Install gateway dependencies
+        working-directory: apps/youtube-data-gateway
+        run: python -m pip install -e '.[dev]'
       - name: Verify worker database connectivity
         working-directory: apps/worker
         run: python -c "from ysa_worker.main import verify_database; import os; verify_database(os.environ['YSA_DATABASE_URL'])"
