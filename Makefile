@@ -2,12 +2,13 @@ GRAPHIFY_BIN ?= graphify
 GRAPHIFY_EXTRACT_ARGS ?= --code-only
 PYTHON ?= python3
 
-.PHONY: setup dev dev-stop dev-logs db-up db-down db-migrate db-rollback api web worker worker-check contracts-check test lint format check graphify graphify-update
+.PHONY: setup dev dev-stop dev-logs db-up db-down db-migrate db-rollback api web worker gateway worker-check gateway-check contracts-check test lint format check graphify graphify-update
 
 setup:
 	cd apps/web && npm install
 	cd apps/api && go mod download
 	cd apps/worker && $(PYTHON) -m pip install -e '.[dev]'
+	cd apps/youtube-data-gateway && $(PYTHON) -m pip install -e '.[dev]'
 
 db-up:
 	docker compose up -d postgres
@@ -30,8 +31,14 @@ web:
 worker:
 	cd apps/worker && $(PYTHON) -m ysa_worker.main
 
+gateway:
+	cd apps/youtube-data-gateway && $(PYTHON) -m ysa_gateway.app
+
 worker-check:
 	cd apps/worker && ruff check . && mypy src tests && pytest
+
+gateway-check:
+	cd apps/youtube-data-gateway && ruff check . && mypy src tests && pytest
 
 contracts-check:
 	@set -eu; for contract in contracts/*.yaml; do openapi-spec-validator "$$contract"; done
@@ -54,21 +61,25 @@ test:
 	cd apps/api && go test -p 1 ./...
 	cd apps/web && npm test
 	cd apps/worker && pytest
+	cd apps/youtube-data-gateway && pytest
 
 lint:
 	cd apps/api && gofmt -l . | tee /tmp/ysa-gofmt.txt; test ! -s /tmp/ysa-gofmt.txt
 	cd apps/web && npm run typecheck
 	cd apps/worker && ruff check . && mypy src tests
+	cd apps/youtube-data-gateway && ruff check . && mypy src tests
 
 format:
 	cd apps/api && gofmt -w .
 	cd apps/worker && ruff format .
+	cd apps/youtube-data-gateway && ruff format .
 
 check:
 	@bash scripts/check-repository.sh
 	cd apps/api && go test -p 1 ./...
 	cd apps/web && npm run typecheck && npm run build
 	$(MAKE) worker-check
+	$(MAKE) gateway-check
 	$(MAKE) contracts-check
 
 graphify:
