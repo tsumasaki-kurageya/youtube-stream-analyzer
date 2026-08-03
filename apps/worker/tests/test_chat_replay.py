@@ -11,6 +11,7 @@ import pytest
 from ysa_worker.chat_replay import (
     ChatReplayGateway,
     ChatReplayProtocolError,
+    ChatReplayTemporaryError,
     collect_all,
     parse_page,
 )
@@ -18,52 +19,52 @@ from ysa_worker.chat_replay import (
 STARTED_AT = datetime(2026, 1, 1, 10, 0, tzinfo=UTC)
 
 
-def renderer(message_id: str, timestamp_usec: str | None, text: str) -> dict[str, object]:
-    value: dict[str, object] = {
+def message(message_id: str, published_at: str, text: str) -> dict[str, object]:
+    return {
         "id": message_id,
-        "authorExternalChannelId": f"author-{message_id}",
-        "authorName": {"simpleText": f"User {message_id}"},
-        "message": {"runs": [{"text": text}]},
+        "authorChannelId": f"author-{message_id}",
+        "authorName": f"User {message_id}",
+        "text": text,
+        "publishedAt": published_at,
     }
-    if timestamp_usec is not None:
-        value["timestampUsec"] = timestamp_usec
-    return {"addChatItemAction": {"item": {"liveChatTextMessageRenderer": value}}}
 
 
-def test_parse_page_normalizes_time_and_skips_missing_timestamp() -> None:
+def test_parse_page_normalizes_elapsed_time() -> None:
     payload = {
-        "actions": [
-            renderer("later", "1767261602000000", "later"),
-            renderer("before", "1767261599000000", "before"),
-            renderer("missing", None, "missing"),
-        ]
+        "messages": [
+            message("later", "2026-01-01T10:00:02Z", "later"),
+            message("before", "2026-01-01T09:59:59Z", "before"),
+        ],
+        "continuation": None,
     }
 
     page = parse_page(payload, STARTED_AT)
 
-    assert [message.external_id for message in page.messages] == ["before", "later"]
-    assert [message.elapsed_milliseconds for message in page.messages] == [0, 2000]
-    assert page.skipped_missing_timestamp == 1
+    assert [item.external_id for item in page.messages] == ["before", "later"]
+    assert [item.elapsed_milliseconds for item in page.messages] == [0, 2000]
 
 
-def test_parse_page_rejects_missing_actions() -> None:
-    with pytest.raises(ChatReplayProtocolError, match="actions"):
+def test_parse_page_rejects_missing_messages() -> None:
+    with pytest.raises(ChatReplayProtocolError, match="messages"):
         parse_page({}, STARTED_AT)
 
 
-def test_collect_all_follows_continuations_and_reports_progress() -> None:
+def test_collect_all_follows_continuations_and_sends_authentication() -> None:
     pages = {
         "": {
-            "actions": [renderer("message-2", "1767261602000000", "second")],
+            "messages": [message("message-2", "2026-01-01T10:00:02Z", "second")],
             "continuation": "next-page",
         },
         "next-page": {
-            "actions": [renderer("message-1", "1767261601000000", "first")],
+            "messages": [message("message-1", "2026-01-01T10:00:01Z", "first")],
+            "continuation": None,
         },
     }
 
     class Handler(BaseHTTPRequestHandler):
         def do_GET(self) -> None:  # noqa: N802
+            assert urlparse(self.path).path == "/v1/chat-replay/pages"
+            assert self.headers.get("Authorization") == "Bearer gateway-token"
             query = parse_qs(urlparse(self.path).query)
             continuation = query.get("continuation", [""])[0]
             body = json.dumps(pages[continuation]).encode()
@@ -82,7 +83,8 @@ def test_collect_all_follows_continuations_and_reports_progress() -> None:
     progress: list[int] = []
     try:
         gateway = ChatReplayGateway(
-            f"http://127.0.0.1:{server.server_port}/replay",
+            f"http://127.0.0.1:{server.server_port}",
+            "gateway-token",
             timeout_seconds=2,
         )
         messages = collect_all(gateway, "video-id", STARTED_AT, progress.append)
@@ -91,8 +93,48 @@ def test_collect_all_follows_continuations_and_reports_progress() -> None:
         thread.join(timeout=2)
         server.server_close()
 
-    assert [message.external_id for message in messages] == ["message-1", "message-2"]
+    assert [item.external_id for item in messages] == ["message-1", "message-2"]
     assert progress == [1, 2]
+
+
+def test_problem_details_retryable_error_is_classified() -> None:
+    class Handler(BaseHTTPRequestHandler):
+        def do_GET(self) -> None:  # noqa: N802
+            body = json.dumps(
+                {
+                    "type": "urn:gateway:temporary",
+                    "title": "Temporary",
+                    "status": 503,
+                    "detail": "source is processing",
+                    "code": "SOURCE_NOT_READY",
+                    "retryable": True,
+                    "requestId": "request-1",
+                }
+            ).encode()
+            self.send_response(503)
+            self.send_header("Content-Type", "application/problem+json")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+
+        def log_message(self, _format: str, *_args: object) -> None:
+            return
+
+    server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        gateway = ChatReplayGateway(
+            f"http://127.0.0.1:{server.server_port}",
+            "gateway-token",
+            timeout_seconds=2,
+        )
+        with pytest.raises(ChatReplayTemporaryError, match="processing"):
+            gateway.fetch_page("video-id", STARTED_AT)
+    finally:
+        server.shutdown()
+        thread.join(timeout=2)
+        server.server_close()
 
 
 def test_collect_all_detects_continuation_loop() -> None:
