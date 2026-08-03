@@ -10,6 +10,7 @@ dependencies = [
 [project.optional-dependencies]
 dev = [
   "mypy>=1.17,<2",
+  "openapi-spec-validator>=0.7,<1",
   "pytest>=8.4,<9",
   "ruff>=0.12,<1",
 ]
