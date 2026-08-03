@@ -2,7 +2,7 @@ GRAPHIFY_BIN ?= graphify
 GRAPHIFY_EXTRACT_ARGS ?= --code-only
 PYTHON ?= python3
 
-.PHONY: setup dev dev-stop dev-logs db-up db-down db-migrate db-rollback api web worker worker-check test lint format check m4-demo-report graphify graphify-update
+.PHONY: setup dev dev-stop dev-logs db-up db-down db-migrate db-rollback api web worker worker-check contracts-check test lint format check m4-demo-report graphify graphify-update
 
 setup:
 	cd apps/web && npm install
@@ -32,6 +32,9 @@ worker:
 
 worker-check:
 	cd apps/worker && ruff check . && mypy src tests && pytest
+
+contracts-check:
+	@set -eu; for contract in contracts/*.yaml; do openapi-spec-validator "$$contract"; done
 
 dev: db-up db-migrate
 	@set -eu; \
@@ -66,6 +69,7 @@ check:
 	cd apps/api && go test -p 1 ./...
 	cd apps/web && npm run typecheck && npm run build
 	$(MAKE) worker-check
+	$(MAKE) contracts-check
 
 m4-demo-report:
 	@test -n "$(RESERVATION_ID)" || { echo "RESERVATION_ID is required" >&2; exit 1; }
