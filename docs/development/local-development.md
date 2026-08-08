@@ -9,6 +9,8 @@ Prerequisites:
 
 Open the repository in the Dev Container. The container installs Node.js, Go, Python, Docker CLI support, PostgreSQL client tools, GitHub CLI, Make, ShellCheck, and Graphify.
 
+`make setup` creates a repository-local `.venv` for the Worker and YouTube Data Gateway. Python commands in the Makefile use this environment automatically; do not install their packages into the system Python.
+
 After creation, verify the environment:
 
 ```bash
@@ -31,7 +33,10 @@ cp .env.example .env
 make setup
 ```
 
-Start PostgreSQL, Main API, and Web UI together:
+The Make targets load `.env` automatically. Do not source the file or export the
+same settings manually before running them.
+
+Start PostgreSQL, Main API, Web UI, YouTube Data Gateway, and Worker together:
 
 ```bash
 make dev
@@ -56,7 +61,7 @@ PostgreSQL data remains in the named Compose volume. Use `docker compose down -v
 ## Common commands
 
 ```bash
-make setup      # Install Web and Go dependencies
+make setup      # Install Web, Go, and Python dependencies
 make db-up      # Start PostgreSQL only
 make api        # Start Main API only
 make web        # Start Web UI only

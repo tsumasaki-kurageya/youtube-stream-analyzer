@@ -45,7 +45,13 @@ class YtDlpChatProvider:
     def get_page(self, video_id: str, continuation: str | None) -> ChatReplayPage:
         bootstrap = self._bootstrap(video_id)
         if continuation is None:
-            return self._get_first_page(video_id, bootstrap)
+            return self._post_page(
+                video_id,
+                bootstrap,
+                bootstrap.initial_continuation,
+                0,
+                None,
+            )
 
         state = self._codec.decode(continuation, "chat")
         if state.get("videoId") != video_id:
@@ -150,40 +156,6 @@ class YtDlpChatProvider:
             extractor=extractor,
         )
 
-    def _get_first_page(
-        self, video_id: str, bootstrap: _ChatBootstrap
-    ) -> ChatReplayPage:
-        response = self._request(
-            "GET",
-            "https://www.youtube.com/live_chat_replay",
-            params={"continuation": bootstrap.initial_continuation},
-        )
-        data = self._parse_chat_response(video_id, bootstrap.extractor, response)
-        live_chat = _live_chat_continuation(data)
-        refresh = nested(
-            live_chat,
-            "header",
-            "liveChatHeaderRenderer",
-            "viewSelector",
-            "sortFilterSubMenuRenderer",
-            "subMenuItems",
-            1,
-            "continuation",
-            "reloadContinuationData",
-        )
-        if isinstance(refresh, dict):
-            refresh_id = refresh.get("continuation")
-            tracking = refresh.get("trackingParams")
-            if isinstance(refresh_id, str) and refresh_id:
-                return self._post_page(
-                    video_id,
-                    bootstrap,
-                    refresh_id,
-                    0,
-                    tracking if isinstance(tracking, str) else None,
-                )
-        return self._build_chat_page(video_id, live_chat, 0)
-
     def _post_page(
         self,
         video_id: str,
@@ -221,26 +193,6 @@ class YtDlpChatProvider:
         if not isinstance(data, dict):
             raise source_changed("YouTube chat response is invalid")
         return self._build_chat_page(video_id, _live_chat_continuation(data), offset)
-
-    def _parse_chat_response(
-        self,
-        video_id: str,
-        extractor: YoutubeBaseInfoExtractor,
-        response: Response,
-    ) -> dict[str, Any]:
-        try:
-            initial = extractor.extract_yt_initial_data(video_id, response.text)
-            if isinstance(initial, dict):
-                return cast(dict[str, Any], initial)
-        except RegexNotFoundError:
-            pass
-        try:
-            parsed = response.json()
-        except requests.JSONDecodeError as error:
-            raise source_changed("YouTube chat page is invalid") from error
-        if not isinstance(parsed, dict):
-            raise source_changed("YouTube chat page is invalid")
-        return cast(dict[str, Any], parsed)
 
     def _build_chat_page(
         self, video_id: str, live_chat: dict[str, Any], previous_offset: int

@@ -1,14 +1,20 @@
 GRAPHIFY_BIN ?= graphify
 GRAPHIFY_EXTRACT_ARGS ?= --code-only
-PYTHON ?= python3
+VENV ?= $(CURDIR)/.venv
+PYTHON ?= $(VENV)/bin/python
+SYSTEM_PYTHON ?= python3
+WITH_ENV := $(CURDIR)/scripts/with-env.sh
 
 .PHONY: setup dev dev-stop dev-logs db-up db-down db-migrate db-rollback api web worker gateway worker-check gateway-check contracts-check deployment-check test lint format check graphify graphify-update
 
-setup:
+setup: $(VENV)/bin/python
 	cd apps/web && npm install
 	cd apps/api && go mod download
 	cd apps/worker && $(PYTHON) -m pip install -e '.[dev]'
 	cd apps/youtube-data-gateway && $(PYTHON) -m pip install -e '.[dev]'
+
+$(VENV)/bin/python:
+	$(SYSTEM_PYTHON) -m venv $(VENV)
 
 db-up:
 	docker compose up -d postgres
@@ -17,43 +23,49 @@ db-down:
 	docker compose down
 
 db-migrate:
-	cd apps/api && go run ./cmd/migrate up
+	$(WITH_ENV) bash -c 'cd apps/api && exec go run ./cmd/migrate up'
 
 db-rollback:
-	cd apps/api && go run ./cmd/migrate down
+	$(WITH_ENV) bash -c 'cd apps/api && exec go run ./cmd/migrate down'
 
 api:
-	cd apps/api && go run ./cmd/api
+	$(WITH_ENV) bash -c 'cd apps/api && exec go run ./cmd/api'
 
 web:
-	cd apps/web && npm run dev
+	$(WITH_ENV) bash -c 'cd apps/web && exec npm run dev'
 
 worker:
-	cd apps/worker && $(PYTHON) -m ysa_worker.main
+	$(WITH_ENV) bash -c 'cd apps/worker && exec $(PYTHON) -m ysa_worker.main'
 
 gateway:
-	cd apps/youtube-data-gateway && ysa-gateway
+	$(WITH_ENV) bash -c 'cd apps/youtube-data-gateway && exec $(PYTHON) -m ysa_gateway.app'
 
 worker-check:
-	cd apps/worker && ruff check . && mypy src tests && pytest
+	cd apps/worker && $(PYTHON) -m ruff check . && $(PYTHON) -m mypy src tests && $(PYTHON) -m pytest
 
 gateway-check:
-	cd apps/youtube-data-gateway && ruff check . && mypy src tests && pytest
+	cd apps/youtube-data-gateway && $(PYTHON) -m ruff check . && $(PYTHON) -m mypy src tests && $(PYTHON) -m pytest
 
 contracts-check:
-	@set -eu; for contract in contracts/*.yaml; do openapi-spec-validator "$$contract"; done
+	@set -eu; for contract in contracts/*.yaml; do $(PYTHON) -m openapi_spec_validator "$$contract"; done
 
 deployment-check:
 	@bash scripts/check-deployment.sh
 
 dev: db-up db-migrate
-	@set -eu; \
+	@flock -n -E 73 .dev.lock $(WITH_ENV) bash -c "set -eu; \
 	trap 'kill 0' INT TERM EXIT; \
 	(cd apps/api && go run ./cmd/api) & \
 	(cd apps/web && npm run dev) & \
-	(cd apps/youtube-data-gateway && ysa-gateway) & \
+	(cd apps/youtube-data-gateway && $(PYTHON) -m ysa_gateway.app) & \
 	(cd apps/worker && $(PYTHON) -m ysa_worker.main) & \
-	wait
+	wait" || { status=$$?; \
+		if [ $$status -eq 73 ]; then \
+			echo "Development services are already running."; \
+		else \
+			exit $$status; \
+		fi; \
+	}
 
 dev-stop:
 	docker compose down
@@ -64,19 +76,19 @@ dev-logs:
 test:
 	cd apps/api && go test -p 1 ./...
 	cd apps/web && npm test
-	cd apps/worker && pytest
-	cd apps/youtube-data-gateway && pytest
+	cd apps/worker && $(PYTHON) -m pytest
+	cd apps/youtube-data-gateway && $(PYTHON) -m pytest
 
 lint:
 	cd apps/api && gofmt -l . | tee /tmp/ysa-gofmt.txt; test ! -s /tmp/ysa-gofmt.txt
 	cd apps/web && npm run typecheck
-	cd apps/worker && ruff check . && mypy src tests
-	cd apps/youtube-data-gateway && ruff check . && mypy src tests
+	cd apps/worker && $(PYTHON) -m ruff check . && $(PYTHON) -m mypy src tests
+	cd apps/youtube-data-gateway && $(PYTHON) -m ruff check . && $(PYTHON) -m mypy src tests
 
 format:
 	cd apps/api && gofmt -w .
-	cd apps/worker && ruff format .
-	cd apps/youtube-data-gateway && ruff format .
+	cd apps/worker && $(PYTHON) -m ruff format .
+	cd apps/youtube-data-gateway && $(PYTHON) -m ruff format .
 
 check:
 	@bash scripts/check-repository.sh

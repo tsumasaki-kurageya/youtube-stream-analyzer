@@ -8,6 +8,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from ysa_gateway.app import create_app
+from ysa_gateway.chat_provider import YtDlpChatProvider
 from ysa_gateway.config import Settings
 from ysa_gateway.core import (
     ChatMessage,
@@ -106,6 +107,39 @@ def test_current_and_previous_tokens_are_accepted(client: TestClient) -> None:
             ],
             "continuation": None,
         }
+
+
+def test_first_chat_page_uses_innertube_api_directly(
+    settings: Settings, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    provider = YtDlpChatProvider(settings, TokenCodec(settings.continuation_secret))
+    bootstrap = type("Bootstrap", (), {"initial_continuation": "initial-token"})()
+    monkeypatch.setattr(provider, "_bootstrap", lambda _video_id: bootstrap)
+
+    def reject_legacy_html_request(*_args: Any, **_kwargs: Any) -> Any:
+        raise AssertionError("the legacy live_chat_replay HTML endpoint was called")
+
+    monkeypatch.setattr(provider, "_request", reject_legacy_html_request)
+
+    def post_page(
+        video_id: str,
+        actual_bootstrap: Any,
+        continuation_id: str,
+        offset: int,
+        click_tracking: str | None,
+    ) -> ChatReplayPage:
+        assert video_id == "abcdefghijk"
+        assert actual_bootstrap is bootstrap
+        assert continuation_id == "initial-token"
+        assert offset == 0
+        assert click_tracking is None
+        return ChatReplayPage(messages=[], continuation="next-token")
+
+    monkeypatch.setattr(provider, "_post_page", post_page)
+
+    page = provider.get_page("abcdefghijk", None)
+
+    assert page.continuation == "next-token"
 
 
 def test_validation_errors_use_problem_details(client: TestClient) -> None:
