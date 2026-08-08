@@ -358,7 +358,7 @@ export function YouTubePlayer({
   }
 
   return (
-    <>
+    <div className="analysis-workspace">
       <section className="player-panel" aria-labelledby="player-title">
         <div className="player-heading">
           <div>
@@ -392,6 +392,6 @@ export function YouTubePlayer({
         </div>
       </section>
       {streamID && state === 'ready' && <TimelinePanel streamID={streamID} currentTime={currentTime} onSeek={seekTo} />}
-    </>
+    </div>
   );
 }

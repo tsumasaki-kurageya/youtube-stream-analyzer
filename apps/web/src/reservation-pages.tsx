@@ -361,8 +361,14 @@ export function ReservationDetailPage({ id, navigation, navigate }: PageProps & 
             <div>
               <p className="eyebrow">解析予約</p>
               <h1>配信 {reservation.youtubeVideoId}</h1>
+              <StateBadge state={reservation.state} />
             </div>
-            <StateBadge state={reservation.state} />
+            <div className="header-actions">
+              {reservation.state === 'completed' && reservation.streamId && (
+                <button onClick={() => navigate(`/streams/${reservation.streamId}`)}>収集済み配信を開く</button>
+              )}
+              <button className="secondary" onClick={() => navigate('/reservations')}>予約一覧へ戻る</button>
+            </div>
           </header>
           {error && <p role="alert" className="error">{error}</p>}
           <section className="reservation-detail-grid">
@@ -393,27 +399,26 @@ export function ReservationDetailPage({ id, navigation, navigate }: PageProps & 
               {reservation.collectionErrorCode && <p className="technical-code">エラーコード: {reservation.collectionErrorCode}</p>}
             </section>
           )}
-          <section className="reservation-info" aria-labelledby="reservation-info-title">
-            <h2 id="reservation-info-title">配信・予約情報</h2>
-            <dl>
-              <div><dt>配信予定</dt><dd>{dateTime(reservation.scheduledStartAt)}</dd></div>
-              <div><dt>配信開始</dt><dd>{dateTime(reservation.actualStartAt)}</dd></div>
-              <div><dt>配信終了</dt><dd>{dateTime(reservation.actualEndAt)}</dd></div>
-              <div><dt>予約登録</dt><dd>{dateTime(reservation.createdAt)}</dd></div>
-              <div><dt>最終更新</dt><dd>{dateTime(reservation.updatedAt)}</dd></div>
-              <div><dt>予約ID</dt><dd className="technical-code">{reservation.id}</dd></div>
-            </dl>
-          </section>
+          <details className="reservation-info">
+            <summary>配信・予約の詳細情報</summary>
+            <section aria-labelledby="reservation-info-title">
+              <h2 id="reservation-info-title">配信・予約情報</h2>
+              <dl>
+                <div><dt>配信予定</dt><dd>{dateTime(reservation.scheduledStartAt)}</dd></div>
+                <div><dt>配信開始</dt><dd>{dateTime(reservation.actualStartAt)}</dd></div>
+                <div><dt>配信終了</dt><dd>{dateTime(reservation.actualEndAt)}</dd></div>
+                <div><dt>予約登録</dt><dd>{dateTime(reservation.createdAt)}</dd></div>
+                <div><dt>最終更新</dt><dd>{dateTime(reservation.updatedAt)}</dd></div>
+                <div><dt>予約ID</dt><dd className="technical-code">{reservation.id}</dd></div>
+              </dl>
+            </section>
+          </details>
           <section className="reservation-actions" aria-labelledby="reservation-actions-title">
             <h2 id="reservation-actions-title">操作</h2>
             <div className="actions">
-              {reservation.state === 'completed' && reservation.streamId && (
-                <button onClick={() => navigate(`/streams/${reservation.streamId}`)}>収集済み配信を開く</button>
-              )}
               {reservation.canCancel && (
                 <button className="danger" onClick={cancel} disabled={cancelling}>{cancelling ? 'キャンセル中…' : '解析予約をキャンセル'}</button>
               )}
-              <button className="secondary" onClick={() => navigate('/reservations')}>予約一覧へ戻る</button>
             </div>
             {!reservation.canCancel && isActive(reservation.state) && <p className="muted">データ収集開始後の予約はキャンセルできません。</p>}
             {terminalStates.has(reservation.state) && reservation.state !== 'completed' && <p className="muted">終了済みの予約に対する操作はありません。</p>}
