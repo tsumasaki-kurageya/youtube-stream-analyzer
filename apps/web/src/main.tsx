@@ -48,7 +48,25 @@ function App() {
   return <NotFoundPage />;
 }
 
-function Navigation() { return <nav aria-label="主要ナビゲーション"><button className="link" onClick={() => navigate('/reservations')}>解析予約</button><button className="link" onClick={() => navigate('/streams')}>登録済み配信</button><button className="link" onClick={() => navigate('/register')}>配信を登録</button></nav>; }
+function Navigation() {
+  const path = window.location.pathname;
+  const item = (href: string, label: string, active: boolean) => (
+    <button className="link" aria-current={active ? 'page' : undefined} onClick={() => navigate(href)}>{label}</button>
+  );
+  return (
+    <nav aria-label="主要ナビゲーション">
+      <button className="brand" onClick={() => navigate('/streams')} aria-label="YouTube Stream Analyzer ホーム">
+        <span className="brand-mark" aria-hidden="true"><i /><i /><i /><i /><i /></span>
+        <span><strong>YSA</strong><small>Stream analyzer</small></span>
+      </button>
+      <div className="nav-links">
+        {item('/reservations', '解析予約', path.startsWith('/reservations'))}
+        {item('/streams', '配信ライブラリ', path.startsWith('/streams'))}
+        {item('/register', '配信を登録', path === '/' || path === '/register')}
+      </div>
+    </nav>
+  );
+}
 
 function RegisterPage() {
   const [url, setUrl] = useState(''); const [preview, setPreview] = useState<Stream | null>(null); const [error, setError] = useState(''); const [loading, setLoading] = useState(false); const [registering, setRegistering] = useState(false);
