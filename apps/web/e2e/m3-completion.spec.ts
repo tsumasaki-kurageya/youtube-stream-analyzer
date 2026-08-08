@@ -70,7 +70,7 @@ async function installPlayer(page: Page) {
   });
 }
 
-test('複数工程収集から同期閲覧・検索・再収集の重複防止まで完了する', async ({ page, request }, testInfo) => {
+test('複数工程収集からプレーヤー表示・再収集の重複防止まで完了する', async ({ page, request }, testInfo) => {
   const stream = await register(request, videoID('m3norm', testInfo));
   await startFull(request, stream.id);
   const firstJob = await waitForJob(request, stream.id, 'succeeded');
@@ -87,15 +87,7 @@ test('複数工程収集から同期閲覧・検索・再収集の重複防止�
 
   await installPlayer(page);
   await page.goto(`/streams/${stream.id}`);
-  await expect(page.getByRole('heading', { name: 'チャット・字幕', exact: true })).toBeVisible();
-  await expect(page.getByRole('list', { name: '現在時刻周辺の字幕' })).toContainText('最初の字幕');
-  await page.getByRole('list', { name: '現在時刻周辺の字幕' }).getByRole('button').first().click();
-  await expect(page.getByLabel('現在の再生時刻')).toHaveText('00:00:01');
-
-  await page.getByLabel('検索語').fill('重要');
-  await expect(page.getByRole('list', { name: 'チャット・字幕検索結果' })).toContainText('重要な検索対象の字幕');
-  await page.getByRole('button', { name: /字幕 · 00:03:00/ }).click();
-  await expect(page.getByLabel('現在の再生時刻')).toHaveText('00:03:00');
+  await expect(page.getByRole('heading', { name: '配信プレーヤー', exact: true })).toBeVisible();
 
   await startFull(request, stream.id);
   await waitForJob(request, stream.id, 'succeeded');

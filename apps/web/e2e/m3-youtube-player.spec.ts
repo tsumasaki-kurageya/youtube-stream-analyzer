@@ -20,27 +20,18 @@ async function mockDetail(page: Page) {
   );
 }
 
-test('詳細画面で再生・停止・シーク・現在時刻を制御できる', async ({ page }) => {
+test('詳細画面ではYouTubeプレーヤー自身の操作UIだけを表示する', async ({ page }) => {
   await page.addInitScript(() => {
-    const state = { current: 0, created: 0, destroyed: 0, played: 0, paused: 0 };
-    Object.assign(window, { __ysaPlayerState: state });
     Object.assign(window, {
       __YSA_YOUTUBE_PLAYER_FACTORY__: (
         element: HTMLElement,
         videoId: string,
         onReady: (adapter: unknown) => void,
       ) => {
-        state.created += 1;
         const frame = document.createElement('iframe');
         frame.title = `stub player ${videoId}`;
         element.append(frame);
-        const adapter = {
-          play: () => { state.played += 1; },
-          pause: () => { state.paused += 1; },
-          seekTo: (seconds: number) => { state.current = seconds; },
-          getCurrentTime: () => state.current,
-          destroy: () => { state.destroyed += 1; frame.remove(); },
-        };
+        const adapter = { destroy: () => frame.remove() };
         queueMicrotask(() => onReady(adapter));
         return adapter;
       },
@@ -50,21 +41,12 @@ test('詳細画面で再生・停止・シーク・現在時刻を制御でき�
   await page.goto(`/streams/${stream.id}`);
 
   const player = page.getByLabel('配信プレーヤー');
-  await expect(player.getByRole('heading', { name: '配信プレーヤー' })).toBeVisible();
   await expect(player.locator('.player-frame')).toHaveAttribute('data-video-id', stream.youtubeVideoId);
-  await expect(player.getByRole('button', { name: '再生' })).toBeEnabled();
-
-  await player.getByRole('button', { name: '再生' }).click();
-  await player.getByRole('button', { name: '停止' }).click();
-  await player.getByLabel('動画内時刻（秒）').fill('125');
-  await player.getByRole('button', { name: '指定時刻へ移動' }).click();
-  await expect(player.getByLabel('現在の再生時刻')).toHaveText('00:02:05');
-
-  const state = await page.evaluate(() => (window as typeof window & { __ysaPlayerState: Record<string, number> }).__ysaPlayerState);
-  expect(state.played).toBe(1);
-  expect(state.paused).toBe(1);
-  expect(state.current).toBe(125);
-  expect(state.created - state.destroyed).toBe(1);
+  const playerFrame = await player.locator('.player-frame').boundingBox();
+  expect(playerFrame?.width).toBeLessThanOrEqual(970);
+  await expect(player.getByRole('button')).toHaveCount(0);
+  await expect(page.getByRole('heading', { name: 'チャット・字幕' })).toHaveCount(0);
+  await expect(page.getByRole('heading', { name: '配信内を検索' })).toHaveCount(0);
 });
 
 test('埋め込み不可の場合は理由とYouTubeへの導線を表示する', async ({ page }) => {
@@ -77,7 +59,7 @@ test('埋め込み不可の場合は理由とYouTubeへの導線を表示する'
         onError: (code?: number) => void,
       ) => {
         queueMicrotask(() => onError(150));
-        return { play() {}, pause() {}, seekTo() {}, getCurrentTime: () => 0, destroy() {} };
+        return { destroy() {} };
       },
     });
   });

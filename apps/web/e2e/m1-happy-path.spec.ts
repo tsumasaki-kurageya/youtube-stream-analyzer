@@ -4,7 +4,7 @@ const streamUrl = 'https://www.youtube.com/watch?v=abcdefghijk';
 
 test('終了済み配信を登録し、詳細・一覧・再読込後も確認できる', async ({ page }) => {
   await page.goto('/streams');
-  await expect(page.getByRole('heading', { name: '登録済み配信', exact: true, level: 1 })).toBeVisible();
+  await expect(page.getByRole('heading', { name: '配信ライブラリ', exact: true, level: 1 })).toBeVisible();
   await expect(page.getByRole('heading', { name: '登録済み配信はありません', exact: true })).toBeVisible();
 
   await page.getByRole('button', { name: '最初の配信を登録' }).click();
