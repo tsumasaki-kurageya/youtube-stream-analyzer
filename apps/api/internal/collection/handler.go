@@ -145,6 +145,8 @@ func stepResponse(step Step) map[string]any {
 		"errorCode": step.ErrorCode,
 		"errorMessage": step.ErrorMessage,
 		"retryable": step.Retryable,
+		"heartbeatAt":    step.HeartbeatAt,
+		"leaseExpiresAt": step.LeaseExpiresAt,
 		"startedAt": step.StartedAt,
 		"finishedAt": step.FinishedAt,
 	}

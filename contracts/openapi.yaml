@@ -395,6 +395,8 @@ components:
         status: { type: string, enum: [queued, running, succeeded, no_data, failed, cancelled] }
         attempt: { type: integer, minimum: 1 }
         progressCount: { type: integer, format: int64, minimum: 0 }
+        heartbeatAt: { type: [string, 'null'], format: date-time }
+        leaseExpiresAt: { type: [string, 'null'], format: date-time }
         startedAt: { type: [string, 'null'], format: date-time }
         finishedAt: { type: [string, 'null'], format: date-time }
         createdAt: { type: string, format: date-time }

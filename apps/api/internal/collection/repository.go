@@ -45,6 +45,8 @@ type Step struct {
 	ErrorCode      *string
 	ErrorMessage   *string
 	Retryable      *bool
+	HeartbeatAt    *time.Time
+	LeaseExpiresAt *time.Time
 	StartedAt      *time.Time
 	FinishedAt     *time.Time
 }
@@ -156,7 +158,7 @@ func (r *Repository) RetryStep(ctx context.Context, jobID, stepName string) (Ste
 
 	step, err := scanStep(tx.QueryRow(ctx, `
 		SELECT id,job_id,name,status,attempt,progress_count,error_code,error_message,
-		       retryable,started_at,finished_at
+		       retryable,heartbeat_at,lease_expires_at,started_at,finished_at
 		FROM collection.collection_steps
 		WHERE job_id=$1 AND name=$2 FOR UPDATE`, jobID, stepName))
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -184,7 +186,7 @@ func (r *Repository) RetryStep(ctx context.Context, jobID, stepName string) (Ste
 		    heartbeat_at=NULL,started_at=NULL,finished_at=NULL,updated_at=now()
 		WHERE job_id=$1 AND name=$2
 		RETURNING id,job_id,name,status,attempt,progress_count,error_code,error_message,
-		          retryable,started_at,finished_at`, jobID, stepName, step.Attempt).Scan(
+		          retryable,heartbeat_at,lease_expires_at,started_at,finished_at`, jobID, stepName, step.Attempt).Scan(
 		&step.ID,
 		&step.JobID,
 		&step.Name,
@@ -194,6 +196,8 @@ func (r *Repository) RetryStep(ctx context.Context, jobID, stepName string) (Ste
 		&step.ErrorCode,
 		&step.ErrorMessage,
 		&step.Retryable,
+		&step.HeartbeatAt,
+		&step.LeaseExpiresAt,
 		&step.StartedAt,
 		&step.FinishedAt,
 	); err != nil {
@@ -257,7 +261,7 @@ func insertStep(ctx context.Context, tx pgx.Tx, jobID, name string) (Step, error
 		INSERT INTO collection.collection_steps(job_id,name,status)
 		VALUES($1,$2,'queued')
 		RETURNING id,job_id,name,status,attempt,progress_count,error_code,error_message,
-		          retryable,started_at,finished_at`, jobID, name))
+		          retryable,heartbeat_at,lease_expires_at,started_at,finished_at`, jobID, name))
 	if err != nil {
 		return Step{}, err
 	}
@@ -270,7 +274,7 @@ func insertStep(ctx context.Context, tx pgx.Tx, jobID, name string) (Step, error
 func (r *Repository) steps(ctx context.Context, jobID string) ([]Step, error) {
 	rows, err := r.db.Query(ctx, `
 		SELECT id,job_id,name,status,attempt,progress_count,error_code,error_message,
-		       retryable,started_at,finished_at
+		       retryable,heartbeat_at,lease_expires_at,started_at,finished_at
 		FROM collection.collection_steps WHERE job_id=$1
 		ORDER BY created_at`, jobID)
 	if err != nil {
@@ -323,6 +327,8 @@ func scanStep(row rowScanner) (Step, error) {
 		&step.ErrorCode,
 		&step.ErrorMessage,
 		&step.Retryable,
+		&step.HeartbeatAt,
+		&step.LeaseExpiresAt,
 		&step.StartedAt,
 		&step.FinishedAt,
 	)

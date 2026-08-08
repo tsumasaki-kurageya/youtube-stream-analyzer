@@ -14,7 +14,13 @@ const stream = {
   createdAt: '2026-01-01T12:00:00Z',
 };
 
-function job(status: 'queued' | 'running' | 'succeeded' | 'failed') {
+function job(status: 'queued' | 'running' | 'succeeded' | 'failed', heartbeatStopped = false) {
+  const heartbeatAt = heartbeatStopped
+    ? new Date(Date.now() - 5 * 60 * 1000).toISOString()
+    : new Date().toISOString();
+  const leaseExpiresAt = heartbeatStopped
+    ? new Date(Date.now() - 3 * 60 * 1000).toISOString()
+    : new Date(Date.now() + 2 * 60 * 1000).toISOString();
   return {
     id: '22222222-2222-2222-2222-222222222222',
     streamId,
@@ -36,6 +42,8 @@ function job(status: 'queued' | 'running' | 'succeeded' | 'failed') {
       progressCount: status === 'running' || status === 'succeeded' ? 42 : 0,
       errorCode: null,
       errorMessage: null,
+      heartbeatAt: status === 'running' ? heartbeatAt : null,
+      leaseExpiresAt: status === 'running' ? leaseExpiresAt : null,
       startedAt: '2026-01-01T12:01:00Z',
       finishedAt: null,
     }],
@@ -62,8 +70,20 @@ test('実行中の工程と取得件数をリロード後も表示する', async
   await expect(page.getByText('収集中')).toBeVisible();
   await expect(page.getByText('チャットリプレイ取得')).toBeVisible();
   await expect(page.getByText('42件')).toBeVisible();
+  await expect(page.getByText('たった今')).toBeVisible();
+  await expect(page.getByText('収集はバックグラウンドで進行しています。')).toBeVisible();
   await page.reload();
   await expect(page.getByText('収集中')).toBeVisible();
+});
+
+test('heartbeatが期限切れの収集に停滞警告を表示する', async ({ page }) => {
+  await mockStream(page);
+  await page.route(`**/api/streams/${streamId}/chat-collections/latest`, (route) =>
+    route.fulfill({ json: job('running', true) }),
+  );
+  await page.goto(`/streams/${streamId}`);
+  await expect(page.getByRole('alert').filter({ hasText: 'ワーカーからの応答が途絶えています' })).toBeVisible();
+  await expect(page.getByText('処理中です。このページを閉じても収集は継続します。')).toHaveCount(0);
 });
 
 test('失敗理由を表示して再実行できる', async ({ page }) => {
